@@ -26,6 +26,7 @@
 5. 必要なら検証:
    ```bash
    mise install
+   mise exec -- uv sync --locked
    ./scripts/check-env.sh
    ```
 
@@ -39,7 +40,6 @@ skills CLI **1.7.6** では、`owner/repo@値` の `@値` は **skill 名**（�
 mise install
 mise exec -- skills --version   # 期待: 1.7.6
 
-# GitHub から同じ skill だけ再取得（commit 固定・プロジェクトローカルのみ）
 DISABLE_TELEMETRY=1 DO_NOT_TRACK=1 \
   mise exec -- skills add 'ayghri/i-have-adhd#1ecea1993b7fce257ffbd686c070948b5e07eda6' \
   --skill i-have-adhd -a cursor -y --copy
@@ -64,8 +64,10 @@ mise exec -- skills list
 
 | 何 | どこで固定するか |
 | --- | --- |
-| Python / Node / `skills` CLI | `mise.toml` + `mise.lock` |
-| pytest / Ruff / aws-sam-cli | `requirements-dev.txt`（venv） |
+| Python / Node / `skills` / **uv** CLI | `mise.toml` + `mise.lock` |
+| pytest / Ruff / aws-sam-cli（Python 依存） | `pyproject.toml` の `dependency-groups.dev` + `uv.lock` |
 | 文書改善スキル本体 | `.agents/skills/` + `skills-lock.json` + `docs/skills-sources.md` |
 
-SAM CLI を mise でも pip でも入れない。pip（venv）だけ。
+- Python **本体**は mise の 3.12.16。uv は `python-preference = only-system` で別系統を取らない
+- パッケージの同期・実行は `mise exec -- uv sync --locked` と `mise exec -- uv run …`
+- SAM CLI は uv の dev 依存だけ。mise では管理しない
