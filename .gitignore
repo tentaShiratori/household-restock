@@ -1,0 +1,39 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# SAM / AWS ローカル成果物（将来用。認証情報は絶対にコミットしない）
+.aws-sam/
+samconfig.toml
+*.aws-sam/
+
+# 秘密・ローカル設定
+.env
+.env.*
+!.env.example
+*.pem
+credentials
+.aws/
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# mise のローカルキャッシュ（.mise/locks は npm:skills 再現用にコミットする）
+.mise/cache/

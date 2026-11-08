@@ -1,0 +1,23 @@
+[project]
+name = "household-restock"
+version = "0.0.0"
+description = "日用品自動補充ワークフロー学習用（環境と計画のみ。業務機能は未実装）"
+requires-python = "==3.12.*"
+readme = "README.md"
+
+# ランタイム依存はまだ持たない（補充機能未実装のため）。
+# Python 本体の版は mise.toml（3.12.16）。パッケージは requirements-dev.txt。
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-q"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+src = ["tests", "scripts"]
+extend-exclude = [".agents", ".mise", ".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "W"]
