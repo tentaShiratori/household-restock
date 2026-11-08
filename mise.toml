@@ -1,0 +1,12 @@
+# ランタイム / CLI の固定（mise）。
+# Python パッケージ（pytest / ruff / aws-sam-cli）は requirements-dev.txt 側。
+# 同じツールを mise と pip の両方で二重管理しない。
+
+[tools]
+python = "3.12.16"
+node = "22.23.4"
+"npm:skills" = "1.7.6"
+
+[settings]
+# .python-version は補助。正は上記 [tools] と mise.lock
+idiomatic_version_file_enable_tools = ["python"]

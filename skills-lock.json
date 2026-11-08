@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "skills": {
+    "i-have-adhd": {
+      "source": "ayghri/i-have-adhd",
+      "sourceType": "github",
+      "skillPath": "skills/i-have-adhd/SKILL.md",
+      "computedHash": "e12ff08dfe4b5baae7065c2f05a5738b8a55f3ccbed82ba45f5496c8e83b2a25",
+      "installMode": "copy"
+    },
+    "yomiyasu": {
+      "source": "nanaism/yomiyasu",
+      "sourceType": "github",
+      "skillPath": "skills/yomiyasu/SKILL.md",
+      "computedHash": "931929b8d7be2c1413927dec7c7ad44b2fba5caee2cd8394a52e7727d3a2c959",
+      "installMode": "copy"
+    }
+  }
+}

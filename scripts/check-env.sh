@@ -5,18 +5,31 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-if [[ ! -x .venv/bin/python ]]; then
-  echo "ERROR: .venv がありません。README の手順で作成してください。" >&2
+if ! command -v mise >/dev/null 2>&1; then
+  echo "ERROR: mise が PATH にありません。README の bootstrap を先に実行してください。" >&2
   exit 1
 fi
 
-# venv を優先（sam もここに入る）
+echo "== mise tools =="
+mise --version
+mise ls --current
+mise exec -- python --version
+mise exec -- node --version
+mise exec -- skills --version
+
+if [[ ! -x .venv/bin/python ]]; then
+  echo "ERROR: .venv がありません。README の venv 作成手順を実行してください。" >&2
+  exit 1
+fi
+
+# 開発依存（pytest / ruff / sam）は venv 側
 # shellcheck disable=SC1091
 source .venv/bin/activate
 export PATH="$ROOT/.venv/bin:$PATH"
 
-echo "== Python =="
+echo "== Python packages (venv) =="
 python --version
+pip check
 
 echo "== pytest =="
 pytest
@@ -33,11 +46,14 @@ fi
 sam --version
 sam --help >/dev/null
 
+echo "== project skills =="
+mise exec -- skills list
+
 echo "== AWS CLI（任意・接続はしない） =="
 if command -v aws >/dev/null 2>&1; then
   aws --version
 else
-  echo "aws は未インストール（今回は必須ではない。導入する場合は公式インストーラを参照）"
+  echo "aws は未インストール（今回は必須ではない）"
 fi
 
 echo "OK: 環境チェック完了（AWS 未接続・補充機能は未検証）"

@@ -1,6 +1,7 @@
-# 開発依存のロックファイル（pip + venv に一本化）。
-# 再現: python3.12 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
-# pytest / ruff / aws-sam-cli とその推移依存を含む。業務ランタイム依存は未追加。
+# Python 開発パッケージのロック（pip + venv）。
+# ランタイム（Python 本体）は mise.toml。SAM CLI もここ（mise では管理しない）。
+# 再現: mise exec -- python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
+# pytest / ruff / aws-sam-cli とその推移依存。業務ランタイム依存は未追加。
 annotated-types==0.8.0
 arrow==1.4.0
 attrs==26.1.0

@@ -6,7 +6,7 @@ requires-python = "==3.12.*"
 readme = "README.md"
 
 # ランタイム依存はまだ持たない（補充機能未実装のため）。
-# 開発ツールは requirements-dev.txt にピン留めする（依存管理はこの pip + venv 方式に一本化）。
+# Python 本体の版は mise.toml（3.12.16）。パッケージは requirements-dev.txt。
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -17,6 +17,7 @@ addopts = "-q"
 target-version = "py312"
 line-length = 88
 src = ["tests", "scripts"]
+extend-exclude = [".agents", ".mise", ".venv"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "W"]

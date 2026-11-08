@@ -34,3 +34,6 @@ credentials
 .vscode/
 *.swp
 .DS_Store
+
+# mise のローカルキャッシュ（.mise/locks は npm:skills 再現用にコミットする）
+.mise/cache/
