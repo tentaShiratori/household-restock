@@ -24,13 +24,13 @@
 
 ## クリーン環境からの再現手順
 
-Python 3.12 が入っている前提です（Ubuntu なら `python3.12-venv` も必要になることがあります）。
+**Python 3.12 が必要です。** `python3` だけでは別マイナーが入っていることがあるため、venv 作成は `python3.12` を使います。未導入なら先に用意してください（Ubuntu 例: `sudo apt install python3.12 python3.12-venv`。配布によってパッケージ名は異なります）。
 
 ```bash
-git clone <このリポジトリ> && cd household-restock
-python3 -m venv .venv
+git clone https://github.com/tentaShiratori/household-restock.git && cd household-restock
+python3.12 -m venv .venv
 source .venv/bin/activate   # Windows は .venv\Scripts\activate
-python --version            # 期待: Python 3.12.x
+python --version            # 期待: Python 3.12.x（venv 内の解釈系）
 pip install -r requirements-dev.txt
 ```
 
