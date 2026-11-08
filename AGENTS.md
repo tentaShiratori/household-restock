@@ -33,21 +33,32 @@
 
 ソース commit は [docs/skills-sources.md](docs/skills-sources.md) を正とする。
 
+skills CLI **1.7.6** では、`owner/repo@値` の `@値` は **skill 名**（フィルタ）であり、Git commit ではない（[source-parser.ts @ v1.7.6](https://raw.githubusercontent.com/vercel-labs/skills/v1.7.6/src/source-parser.ts)）。commit / tag / branch の指定は **`#ref`**（URL fragment）を使う。
+
 ```bash
 mise install
 mise exec -- skills --version   # 期待: 1.7.6
 
-# ロックからの復元（コピー済みファイルがある場合）
-DISABLE_TELEMETRY=1 DO_NOT_TRACK=1 mise exec -- skills experimental_install -y
+# GitHub から同じ skill だけ再取得（commit 固定・プロジェクトローカルのみ）
+DISABLE_TELEMETRY=1 DO_NOT_TRACK=1 \
+  mise exec -- skills add 'ayghri/i-have-adhd#1ecea1993b7fce257ffbd686c070948b5e07eda6' \
+  --skill i-have-adhd -a cursor -y --copy
 
-# または GitHub から同じ skill だけ再取得（commit 固定）
-DISABLE_TELEMETRY=1 DO_NOT_TRACK=1 mise exec -- skills add ayghri/i-have-adhd@1ecea1993b7fce257ffbd686c070948b5e07eda6 --skill i-have-adhd -a cursor -y --copy
-DISABLE_TELEMETRY=1 DO_NOT_TRACK=1 mise exec -- skills add nanaism/yomiyasu@8394e099486aaa2e28cf89992e46f5ebe5ed839d --skill yomiyasu -a cursor -y --copy
+DISABLE_TELEMETRY=1 DO_NOT_TRACK=1 \
+  mise exec -- skills add 'nanaism/yomiyasu#8394e099486aaa2e28cf89992e46f5ebe5ed839d' \
+  --skill yomiyasu -a cursor -y --copy
 
 mise exec -- skills list
 ```
 
 `-g`（グローバル）は使わない。この repo の `.agents/skills/` だけを対象にする。
+
+### `skills-lock.json` と `experimental_install` について
+
+- `skills-lock.json` には **source / computedHash / installMode** はあるが、**Git ref（commit）はない**
+- `skills experimental_install` はロックに記録されたハッシュと、すでにコピーされている（または取得できる）内容の整合を見る用途で、**単独では固定 commit からの再取得を保証しない**
+- commit 固定で入れ直すときは、上の `#SHA` 付き `skills add` を使う
+- 同梱済みの `.agents/skills/` が正の作業コピー。commit 固定の出典は `docs/skills-sources.md`
 
 ## ツール責任の分界
 

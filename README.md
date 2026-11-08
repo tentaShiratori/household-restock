@@ -29,26 +29,46 @@ git clone https://github.com/tentaShiratori/household-restock.git
 cd household-restock
 ```
 
-### 1-1. mise を入れる
+### 1-1. mise を入れる（本体も 2026.10.11 固定）
+
+浮動の最新版は使わない。公式インストーラに版を渡す（チェックサム取得に失敗したら**停止**し、未検証のまま入れない）:
 
 ```bash
-curl -fsSL https://mise.run | sh
+curl -fsSL https://mise.run | MISE_VERSION=v2026.10.11 sh
 export PATH="$HOME/.local/bin:$PATH"
-mise --version
+mise --version   # 期待: 2026.10.11 …
 ```
 
-公式インストーラが失敗する場合（チェックサム取得の 504 など）は GitHub Release から同じ版を入れる:
+`MISE_VERSION` 指定時、インストーラは GitHub Releases の `SHASUMS256.txt` でアーカイブを検証する。チェックサムが取れない・一致しない場合はインストールしない（バイパスしない）。
+
+手動で同じ版を入れる場合も、**検証してから**展開する（linux-x64 例。他 OS は platform 名を替える）:
 
 ```bash
-VER=v2026.10.11
-curl -fsSL -o /tmp/mise.tgz "https://github.com/jdx/mise/releases/download/${VER}/mise-${VER}-linux-x64.tar.gz"
-mkdir -p /tmp/mise-extract "$HOME/.local/bin"
-tar -xzf /tmp/mise.tgz -C /tmp/mise-extract
+VER=2026.10.11
+PLATFORM=linux-x64
+BASE="https://github.com/jdx/mise/releases/download/v${VER}"
+WORKDIR=$(mktemp -d)
+cd "$WORKDIR"
+curl -fsSL -O "$BASE/mise-v${VER}-${PLATFORM}.tar.gz"
+curl -fsSL -O "$BASE/SHASUMS256.txt"
+curl -fsSL -O "$BASE/SHASUMS256.txt.minisig"
+# minisign があるときだけ署名も確認（公式公開鍵）
+if command -v minisign >/dev/null 2>&1; then
+  minisign -Vm SHASUMS256.txt -P RWTC3g8W3z4RZK3V3qv7fa1QY4JEWyBtqIHW+85QlJpZc5yG+uNYNBSZ
+else
+  echo "WARN: minisign 未導入のため SHASUMS256.txt の署名検証はスキップ。SHA-256 照合のみ行う"
+fi
+# チェックサム照合に失敗したらここで止まる（未検証の tar は展開しない）
+grep " ./mise-v${VER}-${PLATFORM}.tar.gz$" SHASUMS256.txt | sha256sum -c -
+mkdir -p "$HOME/.local/bin" /tmp/mise-extract
+tar -xzf "mise-v${VER}-${PLATFORM}.tar.gz" -C /tmp/mise-extract
 cp /tmp/mise-extract/mise/bin/mise "$HOME/.local/bin/mise"
 chmod +x "$HOME/.local/bin/mise"
 export PATH="$HOME/.local/bin:$PATH"
 mise --version   # 期待: 2026.10.11 …
 ```
+
+`SHASUMS256.txt` や署名・照合が取れないときは**停止**し、未検証として扱う。チェックサム失敗を無視して展開しない。
 
 ### 1-2. プロジェクトのツールを入れる
 
