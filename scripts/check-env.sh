@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # 開発環境の再確認用。AWS への接続や認証は行わない。
+# どのカレントディレクトリから呼んでもリポジトリ根へ移動する。activate は不要。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -16,35 +17,24 @@ mise ls --current
 mise exec -- python --version
 mise exec -- node --version
 mise exec -- skills --version
+mise exec -- uv --version
 
-if [[ ! -x .venv/bin/python ]]; then
-  echo "ERROR: .venv がありません。README の venv 作成手順を実行してください。" >&2
-  exit 1
-fi
-
-# 開発依存（pytest / ruff / sam）は venv 側
-# shellcheck disable=SC1091
-source .venv/bin/activate
-export PATH="$ROOT/.venv/bin:$PATH"
-
-echo "== Python packages (venv) =="
-python --version
-pip check
+echo "== uv project =="
+mise exec -- uv lock --check
+mise exec -- uv sync --locked --check
+mise exec -- uv run python --version
+mise exec -- uv pip check
 
 echo "== pytest =="
-pytest
+mise exec -- uv run pytest
 
 echo "== ruff =="
-ruff check .
-ruff format --check .
+mise exec -- uv run ruff check .
+mise exec -- uv run ruff format --check .
 
 echo "== SAM CLI =="
-if ! command -v sam >/dev/null 2>&1; then
-  echo "ERROR: sam が見つかりません（.venv への aws-sam-cli 導入を確認）。" >&2
-  exit 1
-fi
-sam --version
-sam --help >/dev/null
+mise exec -- uv run sam --version
+mise exec -- uv run sam --help >/dev/null
 
 echo "== project skills =="
 mise exec -- skills list
