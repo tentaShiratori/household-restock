@@ -1,4 +1,4 @@
-"""パッケージ骨格のスモーク。業務ロジックの正しさは見ない。"""
+"""パッケージ骨格のスモーク。"""
 
 from __future__ import annotations
 
@@ -9,5 +9,5 @@ def test_package_name() -> None:
     assert package_name() == "household-restock"
 
 
-def test_version_is_placeholder() -> None:
-    assert __version__ == "0.0.0"
+def test_version_is_v0_1_0() -> None:
+    assert __version__ == "0.1.0"

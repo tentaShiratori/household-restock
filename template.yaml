@@ -1,0 +1,90 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: household-restock v0.1.0 — stock threshold to restock request (no UI)
+
+Parameters:
+  DemoItemId:
+    Type: String
+    Default: toilet-paper
+    Description: Fictional single item id used in docs and seed script
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 30
+    MemorySize: 256
+    Architectures:
+      - x86_64
+
+Resources:
+  HouseholdRestockTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+
+  RestockStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Type: STANDARD
+      DefinitionUri: statemachine/restock.asl.json
+      DefinitionSubstitutions:
+        TableName: !Ref HouseholdRestockTable
+      Policies:
+        - DynamoDBWritePolicy:
+            TableName: !Ref HouseholdRestockTable
+
+  EvaluateStockFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: household_restock.handler.lambda_handler
+      Description: DynamoDB Streams → threshold check → start Standard SFN
+      Environment:
+        Variables:
+          STATE_MACHINE_ARN: !Ref RestockStateMachine
+          DEMO_ITEM_ID: !Ref DemoItemId
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - states:StartExecution
+              Resource: !Ref RestockStateMachine
+      Events:
+        ItemStockStream:
+          Type: DynamoDB
+          Properties:
+            Stream: !GetAtt HouseholdRestockTable.StreamArn
+            StartingPosition: LATEST
+            BatchSize: 10
+            MaximumBatchingWindowInSeconds: 0
+            # 補充リクエスト行は届けない（再帰起動防止）。Lambda 内でも再確認する。
+            FilterCriteria:
+              Filters:
+                - Pattern: >-
+                    {"dynamodb":{"Keys":{"sk":{"S":["META"]}},"NewImage":{"entityType":{"S":["ITEM"]}}}}
+
+Outputs:
+  HouseholdRestockTableName:
+    Description: DynamoDB table for items and restock requests
+    Value: !Ref HouseholdRestockTable
+  RestockStateMachineArn:
+    Description: Standard Step Functions ARN
+    Value: !Ref RestockStateMachine
+  EvaluateStockFunctionArn:
+    Description: Stream evaluator Lambda ARN
+    Value: !GetAtt EvaluateStockFunction.Arn
+  DemoItemId:
+    Description: Demo item id
+    Value: !Ref DemoItemId

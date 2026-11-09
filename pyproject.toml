@@ -1,7 +1,7 @@
 [project]
 name = "household-restock"
-version = "0.0.0"
-description = "日用品自動補充ワークフロー学習用（環境と計画のみ。業務機能は未実装）"
+version = "0.1.0"
+description = "日用品自動補充ワークフロー学習用（v0.1.0: Streams→判定→SFN→記録。画面・承認は未実装）"
 requires-python = "==3.12.*"
 readme = "README.md"
 dependencies = []
@@ -45,6 +45,8 @@ addopts = [
 [tool.coverage.run]
 branch = true
 source = ["household_restock"]
+# Lambda 入口（boto3）はローカル単体の対象外。純関数側を測る。
+omit = ["*/household_restock/handler.py"]
 
 [tool.coverage.report]
 fail_under = 80
@@ -76,6 +78,8 @@ all = "error"
 strict-equality-semantics = true
 strict-generic-narrowing = true
 return-type-inference = "always"
+# Lambda ランタイム提供。ローカル venv には入れない。
+allowed-unresolved-imports = ["boto3", "boto3.**", "botocore", "botocore.**"]
 
 [tool.ty.terminal]
 error-on-warning = true
@@ -83,4 +87,4 @@ error-on-warning = true
 [tool.vulture]
 paths = ["src", "tests"]
 min_confidence = 60
-exclude = [".venv/", ".agents/", "node_modules/"]
+exclude = [".venv/", ".agents/", "node_modules/", "*/handler.py"]
