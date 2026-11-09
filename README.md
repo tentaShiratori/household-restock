@@ -3,8 +3,8 @@
 **次にやること:** 下の「1. 導入」を上から実行し、末尾が `OK: 環境チェック完了…` になることを確認する。
 
 Lambda・Step Functions・DynamoDB を学ぶ日用品自動補充の練習用リポジトリ。  
-**いまあるもの:** [v0.1.0 計画](docs/plan/v0.1.0.md)と開発環境だけ。  
-**ないもの:** 補充機能本体、AWS デプロイ、`template.yaml`。
+**いまあるもの:** [完成までの計画](docs/plan/README.md)（文書のみ）と開発環境。  
+**ないもの:** 業務 handler、SAM template、画面、API、AWS デプロイ。v0.1.0 の機能も**未実装**。
 
 計画と環境を分ける理由: 先にツールを動かし、あとから業務テスト失敗とセットアップ失敗を切り分けるため。
 
@@ -101,8 +101,9 @@ activate は不要。どのディレクトリからでも `./scripts/check-env.s
 
 ## 3. 関連リンク
 
-- [docs/plan/v0.1.0.md](docs/plan/v0.1.0.md) — 将来の縦1本（未実装）
-- [AGENTS.md](AGENTS.md) — 文書を読みやすくするときのスキル手順
-- [docs/skills-sources.md](docs/skills-sources.md) — skill のソース commit / ライセンス
+- [docs/plan/README.md](docs/plan/README.md) … 全体ロードマップと要件追跡（各版の詳細へリンク）
+- [docs/plan/v0.1.0.md](docs/plan/v0.1.0.md) … 最初の縦1本（計画のみ・機能未実装）
+- [AGENTS.md](AGENTS.md) … 文書を読みやすくするときのスキル手順
+- [docs/skills-sources.md](docs/skills-sources.md) … skill のソース commit / ライセンス
 
 秘密情報・`.venv`・ビルド成果物は `.gitignore` で除外。手元 PC の設定変更はこの作業では行っていない。
