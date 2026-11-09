@@ -1,10 +1,10 @@
 # household-restock
 
-**次にやること:** 下の「1. 導入」→ `./scripts/check.sh` →（任意）自分の AWS で [v0.1.0 検証](docs/aws-verify-v0.1.0.md)。
+**次にやること:** 下の「1. 導入」→ `./scripts/check.sh` →（任意）自分の AWS で [v0.2.0 検証](docs/aws-verify-v0.2.0.md)。
 
 Lambda・Step Functions・DynamoDB を学ぶ日用品自動補充の練習用リポジトリ。  
-**いまあるもの:** [完成までの計画](docs/plan/README.md)、品質ツール、**v0.1.0**（判定ロジック・`template.yaml`・在庫更新スクリプト）。  
-**ないもの:** 画面、API、承認以降、AWS デプロイ済み環境（**エージェントは AWS に接続しない**）。v0.1.0 は **実装済み・AWS 検証待ち**。
+**いまあるもの:** [完成までの計画](docs/plan/README.md)、品質ツール、**v0.1.0〜v0.2.0**（判定・占有・承認 API・`template.yaml`）。  
+**ないもの:** 画面、注文/配送、AWS デプロイ済み環境（**エージェントは AWS に接続しない**）。v0.2.0 は **実装済み・AWS 検証待ち**。
 
 ## ツールの役割（二重管理しない）
 
@@ -12,7 +12,7 @@ Lambda・Step Functions・DynamoDB を学ぶ日用品自動補充の練習用リ
 | --- | --- | --- |
 | ランタイム / CLI | `mise.toml` + `mise.lock` | Python **3.12.16**、Node **22.23.4**、`npm:skills` **1.7.6**、**uv 0.13.7** |
 | Python パッケージ | `pyproject.toml` + `uv.lock` | pytest / pytest-cov / Ruff / **ty** / vulture / **aws-sam-cli**、`src/household_restock` |
-| IaC（v0.1.0） | `template.yaml` + `statemachine/` | DynamoDB Streams・判定 Lambda・Standard SFN |
+| IaC（v0.2.0） | `template.yaml` + `statemachine/` | Streams・占有・承認待ち SFN・承認 HTTP API |
 | e2e（npm） | `package.json` + `package-lock.json` | **e2e 0.23.0** のみ（mise の npm ツールには載せない） |
 | 文書スキル | `.agents/skills/` + `skills-lock.json` | `i-have-adhd` / `yomiyasu`（手順は [AGENTS.md](AGENTS.md)） |
 
@@ -125,25 +125,29 @@ SAM_CLI_TELEMETRY=0 mise exec -- uv run sam validate --lint
 SAM_CLI_TELEMETRY=0 mise exec -- uv run sam build
 ```
 
-### v0.1.0 の手動更新（ユーザーの AWS）
+### 在庫更新と承認（ユーザーの AWS）
 
 ```bash
 ./scripts/update-stock.sh <TableName> toilet-paper 2 3
+APPROVAL_SHARED_SECRET='…' \
+  ./scripts/decide-restock.sh "<ApprovalApiUrl>" toilet-paper "<streamEventId>" approve
 ```
 
-手順の全体は [docs/aws-verify-v0.1.0.md](docs/aws-verify-v0.1.0.md)。キー設計は [docs/plan/v0.1.0-keys.md](docs/plan/v0.1.0-keys.md)。
+- v0.1: [docs/aws-verify-v0.1.0.md](docs/aws-verify-v0.1.0.md) / [キー](docs/plan/v0.1.0-keys.md)
+- v0.2: [docs/aws-verify-v0.2.0.md](docs/aws-verify-v0.2.0.md) / [設計](docs/plan/v0.2.0-design.md)
+- deploy 時の `ApprovalSharedSecret` は NoEcho。リポジトリに書かない
 
 ### やっていないこと / 未検証
 
 - AWS 認証・デプロイ・課金操作（エージェントは実施しない）
-- Streams 実起動数・再帰なし・冪等の **AWS 上の確認は未検証**
-- 画面・API・承認以降は未実装
+- 承認 timeout・占有・callback の **AWS 上の確認は未検証**
+- 画面・模擬注文以降は未実装
 
 ## 3. 関連リンク
 
 - [docs/plan/README.md](docs/plan/README.md) … 全体ロードマップと要件追跡
-- [docs/plan/v0.1.0.md](docs/plan/v0.1.0.md) … 縦1本（実装済み・AWS 検証待ち）
-- [docs/aws-verify-v0.1.0.md](docs/aws-verify-v0.1.0.md) … ユーザー向け AWS 確認手順
+- [docs/plan/v0.2.0.md](docs/plan/v0.2.0.md) … 承認と占有（実装済み・AWS 検証待ち）
+- [docs/aws-verify-v0.2.0.md](docs/aws-verify-v0.2.0.md) … ユーザー向け AWS 確認手順
 - [AGENTS.md](AGENTS.md) … 文書スキルと品質コマンド
 - [docs/skills-sources.md](docs/skills-sources.md) … skill のソース commit / ライセンス
 

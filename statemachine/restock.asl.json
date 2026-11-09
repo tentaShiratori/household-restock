@@ -1,5 +1,5 @@
 {
-  "Comment": "v0.1.0: record one restock request then end",
+  "Comment": "v0.2.0: record restock, wait for approval, release occupancy; never mutates stock",
   "StartAt": "PutRestockRequest",
   "States": {
     "PutRestockRequest": {
@@ -8,30 +8,14 @@
       "Parameters": {
         "TableName": "${TableName}",
         "Item": {
-          "pk": {
-            "S.$": "States.Format('ITEM#{}', $.itemId)"
-          },
-          "sk": {
-            "S.$": "States.Format('RESTOCK#{}', $.streamEventId)"
-          },
-          "entityType": {
-            "S": "RESTOCK"
-          },
-          "itemId": {
-            "S.$": "$.itemId"
-          },
-          "stock": {
-            "N.$": "States.Format('{}', $.stock)"
-          },
-          "threshold": {
-            "N.$": "States.Format('{}', $.threshold)"
-          },
-          "streamEventId": {
-            "S.$": "$.streamEventId"
-          },
-          "status": {
-            "S": "RECORDED"
-          }
+          "pk": { "S.$": "States.Format('ITEM#{}', $.itemId)" },
+          "sk": { "S.$": "States.Format('RESTOCK#{}', $.streamEventId)" },
+          "entityType": { "S": "RESTOCK" },
+          "itemId": { "S.$": "$.itemId" },
+          "stock": { "N.$": "States.Format('{}', $.stock)" },
+          "threshold": { "N.$": "States.Format('{}', $.threshold)" },
+          "streamEventId": { "S.$": "$.streamEventId" },
+          "status": { "S": "RECORDED" }
         },
         "ConditionExpression": "attribute_not_exists(pk) AND attribute_not_exists(sk)"
       },
@@ -41,11 +25,117 @@
           "Next": "AlreadyRecorded"
         }
       ],
-      "Next": "Done"
+      "Next": "WaitForApproval"
     },
     "AlreadyRecorded": {
-      "Type": "Succeed",
-      "Comment": "Same stream eventID already recorded (idempotent)"
+      "Type": "Pass",
+      "Comment": "Same stream eventID already recorded; continue to approval or terminal",
+      "Next": "WaitForApproval"
+    },
+    "WaitForApproval": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
+      "TimeoutSeconds": ${ApprovalTimeoutSeconds},
+      "Parameters": {
+        "FunctionName": "${StoreTokenFunctionArn}",
+        "Payload": {
+          "taskToken.$": "$$.Task.Token",
+          "itemId.$": "$.itemId",
+          "streamEventId.$": "$.streamEventId"
+        }
+      },
+      "Catch": [
+        {
+          "ErrorEquals": ["States.Timeout"],
+          "Next": "MarkTimedOut"
+        },
+        {
+          "ErrorEquals": ["ApprovalRejected"],
+          "Next": "ReleaseLock"
+        },
+        {
+          "ErrorEquals": ["ALREADY_TERMINAL"],
+          "Next": "ReleaseLock"
+        },
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "MarkFailed"
+        }
+      ],
+      "ResultPath": "$.approvalResult",
+      "Next": "ReleaseLock"
+    },
+    "MarkTimedOut": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "${TableName}",
+        "Key": {
+          "pk": { "S.$": "States.Format('ITEM#{}', $.itemId)" },
+          "sk": { "S.$": "States.Format('RESTOCK#{}', $.streamEventId)" }
+        },
+        "UpdateExpression": "SET #s = :timed REMOVE taskToken",
+        "ExpressionAttributeNames": { "#s": "status" },
+        "ExpressionAttributeValues": {
+          ":timed": { "S": "TIMED_OUT" }
+        }
+      },
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "ReleaseLock"
+        }
+      ],
+      "Next": "ReleaseLock"
+    },
+    "MarkFailed": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "${TableName}",
+        "Key": {
+          "pk": { "S.$": "States.Format('ITEM#{}', $.itemId)" },
+          "sk": { "S.$": "States.Format('RESTOCK#{}', $.streamEventId)" }
+        },
+        "UpdateExpression": "SET #s = :failed REMOVE taskToken",
+        "ExpressionAttributeNames": { "#s": "status" },
+        "ExpressionAttributeValues": {
+          ":failed": { "S": "FAILED" }
+        }
+      },
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "ReleaseLock"
+        }
+      ],
+      "Next": "ReleaseLock"
+    },
+    "ReleaseLock": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:deleteItem",
+      "Parameters": {
+        "TableName": "${TableName}",
+        "Key": {
+          "pk": { "S.$": "States.Format('ITEM#{}', $.itemId)" },
+          "sk": { "S": "LOCK" }
+        },
+        "ConditionExpression": "streamEventId = :eid",
+        "ExpressionAttributeValues": {
+          ":eid": { "S.$": "$.streamEventId" }
+        }
+      },
+      "Catch": [
+        {
+          "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"],
+          "Next": "Done"
+        },
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "Done"
+        }
+      ],
+      "Next": "Done"
     },
     "Done": {
       "Type": "Succeed"

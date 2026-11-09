@@ -1,12 +1,14 @@
-"""DynamoDB キー形状（v0.1.0 採用案）。"""
+"""DynamoDB キー形状（v0.1.0 + v0.2.0 占有）。"""
 
 from __future__ import annotations
 
 ITEM_PK_PREFIX = "ITEM#"
 META_SK = "META"
+LOCK_SK = "LOCK"
 RESTOCK_SK_PREFIX = "RESTOCK#"
 ENTITY_ITEM = "ITEM"
 ENTITY_RESTOCK = "RESTOCK"
+ENTITY_LOCK = "LOCK"
 
 
 def item_pk(item_id: str) -> str:

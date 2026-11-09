@@ -1,12 +1,29 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
-Description: household-restock v0.1.0 — stock threshold to restock request (no UI)
+Description: household-restock v0.2.0 — approval wait, occupancy, no UI
 
 Parameters:
   DemoItemId:
     Type: String
     Default: toilet-paper
     Description: Fictional single item id used in docs and seed script
+  ApprovalTimeoutSeconds:
+    Type: Number
+    Default: 300
+    MinValue: 30
+    MaxValue: 86400
+    Description: waitForTaskToken timeout (shorten for AWS verify)
+  StreamMaxRetryAttempts:
+    Type: Number
+    Default: 2
+    MinValue: 0
+    MaxValue: 10
+    Description: DynamoDB Streams event source max retry attempts
+  ApprovalSharedSecret:
+    Type: String
+    NoEcho: true
+    MinLength: 16
+    Description: Shared secret for X-Approval-Secret (never commit the value)
 
 Globals:
   Function:
@@ -34,6 +51,51 @@ Resources:
       StreamSpecification:
         StreamViewType: NEW_AND_OLD_IMAGES
 
+  ApprovalHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: prod
+
+  StoreTokenFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: household_restock.store_token.lambda_handler
+      Description: Persist task token server-side; never return it
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref HouseholdRestockTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref HouseholdRestockTable
+
+  DecisionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: household_restock.decision_api.lambda_handler
+      Description: Approve/reject restock without exposing task token
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref HouseholdRestockTable
+          APPROVAL_SHARED_SECRET: !Ref ApprovalSharedSecret
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref HouseholdRestockTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - states:SendTaskSuccess
+                - states:SendTaskFailure
+              Resource: "*"
+      Events:
+        Decide:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApprovalHttpApi
+            Path: /items/{itemId}/restock-requests/{streamEventId}/decision
+            Method: POST
+
   RestockStateMachine:
     Type: AWS::Serverless::StateMachine
     Properties:
@@ -41,21 +103,30 @@ Resources:
       DefinitionUri: statemachine/restock.asl.json
       DefinitionSubstitutions:
         TableName: !Ref HouseholdRestockTable
+        StoreTokenFunctionArn: !GetAtt StoreTokenFunction.Arn
+        ApprovalTimeoutSeconds: !Ref ApprovalTimeoutSeconds
       Policies:
         - DynamoDBWritePolicy:
             TableName: !Ref HouseholdRestockTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref HouseholdRestockTable
+        - LambdaInvokePolicy:
+            FunctionName: !Ref StoreTokenFunction
 
   EvaluateStockFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: src/
       Handler: household_restock.handler.lambda_handler
-      Description: DynamoDB Streams → threshold check → start Standard SFN
+      Description: Streams → occupy → start SFN (ReportBatchItemFailures)
       Environment:
         Variables:
           STATE_MACHINE_ARN: !Ref RestockStateMachine
+          TABLE_NAME: !Ref HouseholdRestockTable
           DEMO_ITEM_ID: !Ref DemoItemId
       Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref HouseholdRestockTable
         - Statement:
             - Effect: Allow
               Action:
@@ -69,7 +140,10 @@ Resources:
             StartingPosition: LATEST
             BatchSize: 10
             MaximumBatchingWindowInSeconds: 0
-            # 補充リクエスト行は届けない（再帰起動防止）。Lambda 内でも再確認する。
+            BisectBatchOnFunctionError: true
+            MaximumRetryAttempts: !Ref StreamMaxRetryAttempts
+            FunctionResponseTypes:
+              - ReportBatchItemFailures
             FilterCriteria:
               Filters:
                 - Pattern: >-
@@ -77,7 +151,7 @@ Resources:
 
 Outputs:
   HouseholdRestockTableName:
-    Description: DynamoDB table for items and restock requests
+    Description: DynamoDB table for items, locks, and restock requests
     Value: !Ref HouseholdRestockTable
   RestockStateMachineArn:
     Description: Standard Step Functions ARN
@@ -85,6 +159,15 @@ Outputs:
   EvaluateStockFunctionArn:
     Description: Stream evaluator Lambda ARN
     Value: !GetAtt EvaluateStockFunction.Arn
+  ApprovalApiUrl:
+    Description: Base URL for approval HTTP API
+    Value: !Sub "https://${ApprovalHttpApi}.execute-api.${AWS::Region}.amazonaws.com/prod"
+  ApprovalDecisionPathTemplate:
+    Description: POST path template (add X-Approval-Secret header)
+    Value: /items/{itemId}/restock-requests/{streamEventId}/decision
   DemoItemId:
     Description: Demo item id
     Value: !Ref DemoItemId
+  ApprovalTimeoutSeconds:
+    Description: Configured approval timeout
+    Value: !Ref ApprovalTimeoutSeconds
