@@ -1,0 +1,54 @@
+{
+  "Comment": "v0.1.0: record one restock request then end",
+  "StartAt": "PutRestockRequest",
+  "States": {
+    "PutRestockRequest": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:putItem",
+      "Parameters": {
+        "TableName": "${TableName}",
+        "Item": {
+          "pk": {
+            "S.$": "States.Format('ITEM#{}', $.itemId)"
+          },
+          "sk": {
+            "S.$": "States.Format('RESTOCK#{}', $.streamEventId)"
+          },
+          "entityType": {
+            "S": "RESTOCK"
+          },
+          "itemId": {
+            "S.$": "$.itemId"
+          },
+          "stock": {
+            "N.$": "States.Format('{}', $.stock)"
+          },
+          "threshold": {
+            "N.$": "States.Format('{}', $.threshold)"
+          },
+          "streamEventId": {
+            "S.$": "$.streamEventId"
+          },
+          "status": {
+            "S": "RECORDED"
+          }
+        },
+        "ConditionExpression": "attribute_not_exists(pk) AND attribute_not_exists(sk)"
+      },
+      "Catch": [
+        {
+          "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"],
+          "Next": "AlreadyRecorded"
+        }
+      ],
+      "Next": "Done"
+    },
+    "AlreadyRecorded": {
+      "Type": "Succeed",
+      "Comment": "Same stream eventID already recorded (idempotent)"
+    },
+    "Done": {
+      "Type": "Succeed"
+    }
+  }
+}

@@ -1,27 +1,26 @@
 # household-restock
 
-**次にやること:** 下の「1. 導入」を上から実行し、`./scripts/check.sh` の末尾が `OK: 品質チェック完了…` になることを確認する。
+**次にやること:** 下の「1. 導入」→ `./scripts/check.sh` →（任意）自分の AWS で [v0.1.0 検証](docs/aws-verify-v0.1.0.md)。
 
 Lambda・Step Functions・DynamoDB を学ぶ日用品自動補充の練習用リポジトリ。  
-**いまあるもの:** [完成までの計画](docs/plan/README.md)、開発環境、品質ツール（unit/coverage/ruff/vulture/ty/e2e tooling）。  
-**ないもの:** 業務 handler、SAM template、画面、API、AWS デプロイ。v0.1.0 の機能も**未実装**。
-
-計画と環境を分ける理由: 先にツールを動かし、あとから業務テスト失敗とセットアップ失敗を切り分けるため。
+**いまあるもの:** [完成までの計画](docs/plan/README.md)、品質ツール、**v0.1.0**（判定ロジック・`template.yaml`・在庫更新スクリプト）。  
+**ないもの:** 画面、API、承認以降、AWS デプロイ済み環境（**エージェントは AWS に接続しない**）。v0.1.0 は **実装済み・AWS 検証待ち**。
 
 ## ツールの役割（二重管理しない）
 
 | 層 | 固定の場所 | 中身 |
 | --- | --- | --- |
 | ランタイム / CLI | `mise.toml` + `mise.lock` | Python **3.12.16**、Node **22.23.4**、`npm:skills` **1.7.6**、**uv 0.13.7** |
-| Python パッケージ | `pyproject.toml` + `uv.lock` | pytest / pytest-cov / Ruff / **ty** / vulture / **aws-sam-cli**、骨格 `src/household_restock` |
+| Python パッケージ | `pyproject.toml` + `uv.lock` | pytest / pytest-cov / Ruff / **ty** / vulture / **aws-sam-cli**、`src/household_restock` |
+| IaC（v0.1.0） | `template.yaml` + `statemachine/` | DynamoDB Streams・判定 Lambda・Standard SFN |
 | e2e（npm） | `package.json` + `package-lock.json` | **e2e 0.23.0** のみ（mise の npm ツールには載せない） |
 | 文書スキル | `.agents/skills/` + `skills-lock.json` | `i-have-adhd` / `yomiyasu`（手順は [AGENTS.md](AGENTS.md)） |
 
 - **mise**: ツール版の固定と `mise exec`
 - **uv**: Python 依存の解決・ロック・仮想環境・`uv run`
 - **npm**: e2e だけ。`npm:skills` は mise 側のまま。同じ npm パッケージを二重管理しない
-- AWS CLI: 任意。バージョン確認まで。**認証・接続は不要・禁止（この段階）**
-- Docker: 今回は必須にしない
+- AWS CLI: 任意。ローカル検証では不要。**deploy / 接続はユーザーが自分で行う**（エージェントはしない）
+- Docker: `sam build` のデフォルト（コンテナなし）で可。`--use-container` は任意
 
 検証済みの mise 本体: **2026.10.11**（linux-x64）。導入手順は次節。
 
@@ -91,7 +90,7 @@ mise exec -- skills list
 
 | チェック | コマンド（check.sh 内） | 期待 |
 | --- | --- | --- |
-| unit + coverage | `mise exec -- uv run pytest` | 骨格テスト成功、`household_restock` が **80% 以上** |
+| unit + coverage | `mise exec -- uv run pytest` | 判定・Streams 解釈など **80% 以上**（handler 入口は omit） |
 | lint | `ruff check .` | 問題なし |
 | format | `ruff format --check .` | 問題なし |
 | deadcode | `vulture src tests` | 未使用なし |
@@ -102,8 +101,8 @@ mise exec -- skills list
 
 ### coverage について
 
-測定対象は業務を含まない最小パッケージ骨格（`src/household_restock`）だけ。  
-**いまの coverage 数値は業務品質を示さない。** 業務 handler や判定ロジックはまだ無い。
+測定対象は `src/household_restock` の純ロジック（handler は omit）。  
+**coverage≥80 はローカル品質ゲートであり、AWS 上の受け入れ完了を意味しない。**
 
 ### typecheck（ty）について
 
@@ -119,17 +118,33 @@ mise exec -- skills list
 - いま `mise exec -- npm run test:e2e`（`e2e run`）はシナリオ0件のため公式どおり `NO_TESTS` で失敗する。`--pass-with-no-tests` で偽の合格にはしない
 - GitHub Actions の CI 追加は今回の範囲外（必要なら別途提案）
 
-### やっていないこと
+### SAM（ローカル）
 
-- `template.yaml` がないため **`sam validate` / `sam build` は未実施**
-- AWS 認証・デプロイ・課金操作はしない
-- 補充ワークフロー・画面・API は未実装
+```bash
+SAM_CLI_TELEMETRY=0 mise exec -- uv run sam validate --lint
+SAM_CLI_TELEMETRY=0 mise exec -- uv run sam build
+```
+
+### v0.1.0 の手動更新（ユーザーの AWS）
+
+```bash
+./scripts/update-stock.sh <TableName> toilet-paper 2 3
+```
+
+手順の全体は [docs/aws-verify-v0.1.0.md](docs/aws-verify-v0.1.0.md)。キー設計は [docs/plan/v0.1.0-keys.md](docs/plan/v0.1.0-keys.md)。
+
+### やっていないこと / 未検証
+
+- AWS 認証・デプロイ・課金操作（エージェントは実施しない）
+- Streams 実起動数・再帰なし・冪等の **AWS 上の確認は未検証**
+- 画面・API・承認以降は未実装
 
 ## 3. 関連リンク
 
 - [docs/plan/README.md](docs/plan/README.md) … 全体ロードマップと要件追跡
-- [docs/plan/v0.1.0.md](docs/plan/v0.1.0.md) … 最初の縦1本（計画のみ・機能未実装）
+- [docs/plan/v0.1.0.md](docs/plan/v0.1.0.md) … 縦1本（実装済み・AWS 検証待ち）
+- [docs/aws-verify-v0.1.0.md](docs/aws-verify-v0.1.0.md) … ユーザー向け AWS 確認手順
 - [AGENTS.md](AGENTS.md) … 文書スキルと品質コマンド
 - [docs/skills-sources.md](docs/skills-sources.md) … skill のソース commit / ライセンス
 
-秘密情報・`.venv`・`node_modules`・ビルド成果物は `.gitignore` で除外。
+秘密情報・`.venv`・`node_modules`・`.aws-sam`・ビルド成果物は `.gitignore` で除外。
