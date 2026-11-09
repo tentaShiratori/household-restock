@@ -71,8 +71,8 @@ v0.1.0 の「画面なし」は**その版の非範囲**であり、全体方針
 
 | 層 | できること | できないこと / 注意 |
 | --- | --- | --- |
-| いま（環境のみ） | `./scripts/check-env.sh`、pytest 2 件（環境スモーク） | 業務・画面の正しさは保証しない |
-| ローカル（各版実装後） | 純ロジック、API 境界、状態遷移、模擬再送、画面操作、`sam validate`/`build`（template がある版） | Streams / IAM / SFN の本番時間挙動を SAM Local だけで保証しない |
+| いま（環境+品質ツール） | `./scripts/check.sh`（unit/coverage/ruff/vulture/mypy/e2e doctor）。coverage は骨格のみで**業務品質を示さない**。e2e シナリオは未作成 | 業務・画面の正しさは保証しない。`e2e run` はシナリオ0件で公式どおり失敗 |
+| ローカル（各版実装後） | 純ロジック、API 境界、状態遷移、模擬再送、画面操作（e2e は v0.3.0 以降）、`sam validate`/`build`（template がある版） | Streams / IAM / SFN の本番時間挙動を SAM Local だけで保証しない |
 | AWS（ユーザー側） | 実起動数、並行、timeout、callback、Retry/Catch、Wait、直接更新、補償履歴、画面 API、削除再作成 | エージェントは AWS 接続・デプロイ・削除を**しない**。計画上はユーザー実施 |
 
 実装済みでも AWS 未検証なら **「実装済み・AWS 検証待ち」** とし、完成扱いにしない。

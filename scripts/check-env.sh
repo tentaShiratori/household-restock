@@ -25,7 +25,7 @@ mise exec -- uv sync --locked --check
 mise exec -- uv run python --version
 mise exec -- uv pip check
 
-echo "== pytest =="
+echo "== pytest (+ coverage fail-under=80) =="
 mise exec -- uv run pytest
 
 echo "== ruff =="
@@ -47,3 +47,4 @@ else
 fi
 
 echo "OK: 環境チェック完了（AWS 未接続・補充機能は未検証）"
+echo "品質ゲート一式は ./scripts/check.sh（vulture / mypy / e2e doctor を含む）"
