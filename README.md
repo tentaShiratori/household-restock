@@ -3,7 +3,7 @@
 **次にやること:** 下の「1. 導入」を上から実行し、`./scripts/check.sh` の末尾が `OK: 品質チェック完了…` になることを確認する。
 
 Lambda・Step Functions・DynamoDB を学ぶ日用品自動補充の練習用リポジトリ。  
-**いまあるもの:** [完成までの計画](docs/plan/README.md)、開発環境、品質ツール（unit/coverage/ruff/vulture/mypy/e2e tooling）。  
+**いまあるもの:** [完成までの計画](docs/plan/README.md)、開発環境、品質ツール（unit/coverage/ruff/vulture/ty/e2e tooling）。  
 **ないもの:** 業務 handler、SAM template、画面、API、AWS デプロイ。v0.1.0 の機能も**未実装**。
 
 計画と環境を分ける理由: 先にツールを動かし、あとから業務テスト失敗とセットアップ失敗を切り分けるため。
@@ -13,7 +13,7 @@ Lambda・Step Functions・DynamoDB を学ぶ日用品自動補充の練習用リ
 | 層 | 固定の場所 | 中身 |
 | --- | --- | --- |
 | ランタイム / CLI | `mise.toml` + `mise.lock` | Python **3.12.16**、Node **22.23.4**、`npm:skills` **1.7.6**、**uv 0.13.7** |
-| Python パッケージ | `pyproject.toml` + `uv.lock` | pytest / pytest-cov / Ruff / mypy / vulture / **aws-sam-cli**、骨格 `src/household_restock` |
+| Python パッケージ | `pyproject.toml` + `uv.lock` | pytest / pytest-cov / Ruff / **ty** / vulture / **aws-sam-cli**、骨格 `src/household_restock` |
 | e2e（npm） | `package.json` + `package-lock.json` | **e2e 0.23.0** のみ（mise の npm ツールには載せない） |
 | 文書スキル | `.agents/skills/` + `skills-lock.json` | `i-have-adhd` / `yomiyasu`（手順は [AGENTS.md](AGENTS.md)） |
 
@@ -62,13 +62,14 @@ mise exec -- uv lock --check
 mise exec -- uv pip check       # 期待: All installed packages are compatible
 ```
 
-### 1-4. e2e 依存を同期する（npm）
+### 1-4. e2e 依存を同期する（npm・mise 固定 Node）
 
 ```bash
-npm ci
-npm run e2e:version   # 期待: 0.23.0
+mise exec -- npm ci
+mise exec -- npm run e2e:version   # 期待: 0.23.0
 ```
 
+`mise exec --` で mise 固定の Node / npm を使う（PATH 上の別 Node に依存しない）。  
 テレメトリは標準で切る（`E2E_TELEMETRY_DISABLED=1` / `DO_NOT_TRACK=1`。npm scripts にも付与済み）。  
 AI モデルや API キーは**要求しない**（engine/gateway とも none）。秘密情報を記録しない。
 
@@ -94,8 +95,8 @@ mise exec -- skills list
 | lint | `ruff check .` | 問題なし |
 | format | `ruff format --check .` | 問題なし |
 | deadcode | `vulture src tests` | 未使用なし |
-| typecheck | `mypy`（strict） | 問題なし |
-| e2e tooling | `npm run e2e:version` / `e2e:doctor` | `0.23.0`、doctor 成功 |
+| typecheck | `ty check`（Astral **ty 0.0.99**、Beta / 1.0 前） | 問題なし（警告も失敗） |
+| e2e tooling | `mise exec -- npm run e2e:version` / `e2e:doctor` | `0.23.0`、doctor 成功 |
 
 環境だけ再確認するときは `./scripts/check-env.sh`（SAM と skills の有無も含む軽い確認）。
 
@@ -104,12 +105,18 @@ mise exec -- skills list
 測定対象は業務を含まない最小パッケージ骨格（`src/household_restock`）だけ。  
 **いまの coverage 数値は業務品質を示さない。** 業務 handler や判定ロジックはまだ無い。
 
+### typecheck（ty）について
+
+- Astral の [`ty`](https://docs.astral.sh/ty/) **0.0.99**（PyPI Development Status: Beta。1.0 前のプレビュー相当）
+- uv の dev 依存で固定（mise では管理しない）
+- 対象: `src` と `tests`。Python 3.12。`rules.all = "error"`、`error-on-warning = true`、厳格な narrowing
+
 ### e2e について
 
 - パッケージはユーザー指定の npm [`e2e`](https://www.npmjs.com/package/e2e) **0.23.0**（tester-army、Apache-2.0）
 - 設定は `e2e.config.ts`（`init --engine none --gateway none` 相当）。画面やテスト用アプリは作っていない
 - **意味のあるシナリオは [v0.3.0](docs/plan/v0.3.0.md) の最小画面ができてから書く**
-- いま `npm run test:e2e`（`e2e run`）はシナリオ0件のため公式どおり `NO_TESTS` で失敗する。`--pass-with-no-tests` で偽の合格にはしない
+- いま `mise exec -- npm run test:e2e`（`e2e run`）はシナリオ0件のため公式どおり `NO_TESTS` で失敗する。`--pass-with-no-tests` で偽の合格にはしない
 - GitHub Actions の CI 追加は今回の範囲外（必要なら別途提案）
 
 ### やっていないこと

@@ -18,7 +18,7 @@
 ```bash
 mise install
 mise exec -- uv sync --locked
-npm ci
+mise exec -- npm ci
 ./scripts/check.sh
 # 期待末尾: OK: 品質チェック完了（AWS 未接続・業務機能未検証・e2e シナリオは未作成）
 ```
@@ -28,11 +28,12 @@ npm ci
 | unit + coverage（fail-under 80） | pytest 8.4.2 / pytest-cov 7.0.0 | `mise exec -- uv run pytest` |
 | lint / format | Ruff 0.14.3 | `ruff check .` / `ruff format --check .` |
 | deadcode | vulture 2.14 | `vulture src tests` |
-| typecheck | mypy 1.18.2（strict） | `mypy` |
-| e2e tooling | npm e2e 0.23.0 | `npm run e2e:version` / `e2e:doctor` |
+| typecheck | **ty 0.0.99**（Beta / 1.0 前） | `mise exec -- uv run ty check` |
+| e2e tooling | npm e2e 0.23.0 | `mise exec -- npm run e2e:version` / `e2e:doctor` |
 
 - coverage の測定対象は骨格 `src/household_restock` のみ。**業務品質を示さない**
-- `npm run test:e2e` はシナリオ0件だと `NO_TESTS` で失敗する（公式どおり）。偽の合格にしない。シナリオは v0.3.0 画面以降
+- ty は Astral 製。uv の dev 依存で固定。設定は `pyproject.toml` の `[tool.ty.*]`（全ルール error、警告も失敗、Python 3.12）
+- `mise exec -- npm run test:e2e` はシナリオ0件だと `NO_TESTS` で失敗する（公式どおり）。偽の合格にしない。シナリオは v0.3.0 画面以降
 - 環境スモークだけなら `./scripts/check-env.sh`
 - GitHub Actions CI は未導入（依頼があれば別 PR で提案）
 
@@ -50,7 +51,7 @@ npm ci
    ```bash
    mise install
    mise exec -- uv sync --locked
-   npm ci
+   mise exec -- npm ci
    ./scripts/check.sh
    ```
 
@@ -89,8 +90,8 @@ mise exec -- skills list
 | 何 | どこで固定するか |
 | --- | --- |
 | Python / Node / `skills` / **uv** CLI | `mise.toml` + `mise.lock` |
-| pytest / cov / Ruff / mypy / vulture / aws-sam-cli | `pyproject.toml` の `dependency-groups.dev` + `uv.lock` |
-| e2e（npm） | `package.json` + `package-lock.json`（mise の npm ツールには載せない） |
+| pytest / cov / Ruff / ty / vulture / aws-sam-cli | `pyproject.toml` の `dependency-groups.dev` + `uv.lock` |
+| e2e（npm） | `package.json` + `package-lock.json`（mise の npm ツールには載せない。実行は `mise exec -- npm …`） |
 | 文書改善スキル本体 | `.agents/skills/` + `skills-lock.json` + `docs/skills-sources.md` |
 
 - Python **本体**は mise の 3.12.16。uv は `python-preference = only-system` で別系統を取らない

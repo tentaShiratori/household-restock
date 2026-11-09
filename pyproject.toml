@@ -19,10 +19,10 @@ packages = ["src/household_restock"]
 [dependency-groups]
 dev = [
   "aws-sam-cli==1.145.2",
-  "mypy==1.18.2",
   "pytest==8.4.2",
   "pytest-cov==7.0.0",
   "ruff==0.14.3",
+  "ty==0.0.99",
   "vulture==2.14",
 ]
 
@@ -60,13 +60,25 @@ extend-exclude = [".agents", ".mise", ".venv", "node_modules"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "W"]
 
-[tool.mypy]
-python_version = "3.12"
-strict = true
-mypy_path = "src"
-files = ["src", "tests"]
-explicit_package_bases = true
-warn_unused_configs = true
+# ty (Astral) は 0.0.x / PyPI Development Status: Beta（1.0 前のプレビュー相当）。
+# 公式で可能な範囲の厳しめ設定: 全ルール error、警告も失敗、Python 3.12、厳格な narrowing。
+[tool.ty.environment]
+python-version = "3.12"
+root = ["./src"]
+
+[tool.ty.src]
+include = ["src", "tests"]
+
+[tool.ty.rules]
+all = "error"
+
+[tool.ty.analysis]
+strict-equality-semantics = true
+strict-generic-narrowing = true
+return-type-inference = "always"
+
+[tool.ty.terminal]
+error-on-warning = true
 
 [tool.vulture]
 paths = ["src", "tests"]

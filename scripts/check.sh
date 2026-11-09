@@ -35,20 +35,22 @@ echo "== deadcode (vulture) =="
 # min_confidence=60（pyproject）: 未使用関数(60%)も検出。見つかると exit != 0
 mise exec -- uv run vulture src tests
 
-echo "== typecheck (mypy strict) =="
-mise exec -- uv run mypy
+echo "== typecheck (ty; Beta / 0.0.x) =="
+mise exec -- uv run ty check
+# 期待: src/tests に型エラーなし。警告も error-on-warning で失敗扱い。
 
-echo "== e2e tooling (npm e2e@0.23.0, telemetry off) =="
+echo "== e2e tooling (npm e2e@0.23.0, telemetry off, mise Node) =="
 if [[ ! -d node_modules/e2e ]]; then
-  echo "ERROR: node_modules/e2e がありません。先に npm ci を実行してください。" >&2
+  echo "ERROR: node_modules/e2e がありません。先に mise exec -- npm ci を実行してください。" >&2
   exit 1
 fi
-npm run e2e:version
+# mise 固定の Node / npm を使う（PATH 上の別 Node に依存しない）
+mise exec -- npm run e2e:version
 # 期待: 0.23.0
-npm run e2e:doctor
+mise exec -- npm run e2e:doctor
 # 期待: exit 0（シナリオ0件でも doctor は通る）
 #
-# 注意: npm run test:e2e (= e2e run) はシナリオ0件だと公式どおり NO_TESTS で失敗する。
+# 注意: mise exec -- npm run test:e2e (= e2e run) はシナリオ0件だと公式どおり NO_TESTS で失敗する。
 # --pass-with-no-tests で偽の合格にしない。意味のあるシナリオは v0.3.0 の画面以降。
 
 echo "OK: 品質チェック完了（AWS 未接続・業務機能未検証・e2e シナリオは未作成）"

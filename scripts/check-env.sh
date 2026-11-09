@@ -47,4 +47,4 @@ else
 fi
 
 echo "OK: 環境チェック完了（AWS 未接続・補充機能は未検証）"
-echo "品質ゲート一式は ./scripts/check.sh（vulture / mypy / e2e doctor を含む）"
+echo "品質ゲート一式は ./scripts/check.sh（vulture / ty / e2e doctor を含む）"
