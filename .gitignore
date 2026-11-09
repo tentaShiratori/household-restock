@@ -37,3 +37,8 @@ credentials
 
 # mise のローカルキャッシュ（.mise/locks は npm:skills 再現用にコミットする）
 .mise/cache/
+
+# Node / e2e（package.json + package-lock.json で固定。mise の npm:skills とは別系統）
+node_modules/
+.e2e/
+*.tsbuildinfo

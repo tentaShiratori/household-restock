@@ -1,0 +1,17 @@
+{
+  "name": "household-restock",
+  "private": true,
+  "type": "module",
+  "description": "e2e runner only. Python tooling stays in uv / mise. Do not add business UI here yet.",
+  "engines": {
+    "node": "^22.22.3 || >=24.8.0"
+  },
+  "scripts": {
+    "test:e2e": "E2E_TELEMETRY_DISABLED=1 DO_NOT_TRACK=1 e2e run",
+    "e2e:doctor": "E2E_TELEMETRY_DISABLED=1 DO_NOT_TRACK=1 e2e doctor",
+    "e2e:version": "E2E_TELEMETRY_DISABLED=1 DO_NOT_TRACK=1 e2e --version"
+  },
+  "devDependencies": {
+    "e2e": "0.23.0"
+  }
+}
