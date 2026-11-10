@@ -22,6 +22,7 @@
       "Catch": [
         {
           "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"],
+          "ResultPath": "$.error",
           "Next": "AlreadyRecorded"
         }
       ],
@@ -29,7 +30,7 @@
     },
     "AlreadyRecorded": {
       "Type": "Pass",
-      "Comment": "Same stream eventID already recorded; continue to approval or terminal",
+      "Comment": "Same stream eventID already recorded; keep itemId/streamEventId",
       "Next": "WaitForApproval"
     },
     "WaitForApproval": {
@@ -47,18 +48,22 @@
       "Catch": [
         {
           "ErrorEquals": ["States.Timeout"],
+          "ResultPath": "$.error",
           "Next": "MarkTimedOut"
         },
         {
           "ErrorEquals": ["ApprovalRejected"],
+          "ResultPath": "$.error",
           "Next": "ReleaseLock"
         },
         {
           "ErrorEquals": ["ALREADY_TERMINAL"],
+          "ResultPath": "$.error",
           "Next": "ReleaseLock"
         },
         {
           "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
           "Next": "MarkFailed"
         }
       ],
@@ -67,6 +72,7 @@
     },
     "MarkTimedOut": {
       "Type": "Task",
+      "Comment": "Only AWAITING/RECORDED → TIMED_OUT; never overwrite APPROVED/REJECTED",
       "Resource": "arn:aws:states:::dynamodb:updateItem",
       "Parameters": {
         "TableName": "${TableName}",
@@ -75,21 +81,32 @@
           "sk": { "S.$": "States.Format('RESTOCK#{}', $.streamEventId)" }
         },
         "UpdateExpression": "SET #s = :timed REMOVE taskToken",
+        "ConditionExpression": "#s = :awaiting OR #s = :recorded",
         "ExpressionAttributeNames": { "#s": "status" },
         "ExpressionAttributeValues": {
-          ":timed": { "S": "TIMED_OUT" }
+          ":timed": { "S": "TIMED_OUT" },
+          ":awaiting": { "S": "AWAITING_APPROVAL" },
+          ":recorded": { "S": "RECORDED" }
         }
       },
       "Catch": [
         {
+          "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"],
+          "ResultPath": "$.error",
+          "Next": "ReleaseLock"
+        },
+        {
           "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
           "Next": "ReleaseLock"
         }
       ],
+      "ResultPath": "$.markTimedOut",
       "Next": "ReleaseLock"
     },
     "MarkFailed": {
       "Type": "Task",
+      "Comment": "Only non-terminal → FAILED; do not overwrite approve/reject/timeout",
       "Resource": "arn:aws:states:::dynamodb:updateItem",
       "Parameters": {
         "TableName": "${TableName}",
@@ -98,17 +115,27 @@
           "sk": { "S.$": "States.Format('RESTOCK#{}', $.streamEventId)" }
         },
         "UpdateExpression": "SET #s = :failed REMOVE taskToken",
+        "ConditionExpression": "#s = :awaiting OR #s = :recorded",
         "ExpressionAttributeNames": { "#s": "status" },
         "ExpressionAttributeValues": {
-          ":failed": { "S": "FAILED" }
+          ":failed": { "S": "FAILED" },
+          ":awaiting": { "S": "AWAITING_APPROVAL" },
+          ":recorded": { "S": "RECORDED" }
         }
       },
       "Catch": [
         {
+          "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"],
+          "ResultPath": "$.error",
+          "Next": "ReleaseLock"
+        },
+        {
           "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
           "Next": "ReleaseLock"
         }
       ],
+      "ResultPath": "$.markFailed",
       "Next": "ReleaseLock"
     },
     "ReleaseLock": {
@@ -128,13 +155,12 @@
       "Catch": [
         {
           "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"],
-          "Next": "Done"
-        },
-        {
-          "ErrorEquals": ["States.ALL"],
-          "Next": "Done"
+          "ResultPath": "$.error",
+          "Next": "Done",
+          "Comment": "Lock already gone or owned by another eventId — occupancy not held by us"
         }
       ],
+      "ResultPath": "$.releaseLock",
       "Next": "Done"
     },
     "Done": {

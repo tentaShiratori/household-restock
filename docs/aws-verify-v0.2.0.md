@@ -36,8 +36,9 @@ APPROVAL_SHARED_SECRET='…' \
 
 1. Timeout を短く deploy したうえで、在庫を以下にして承認しない
 2. タイムアウト後、補充の status が `TIMED_OUT`
-3. `LOCK` が解放されている
+3. `LOCK` が解放されている（実行が失敗終了なら `LOCK` 残留を疑い、成功終了なのに `LOCK` が残る場合も不具合）
 4. 品目 `stock` は変わらない
+5. （任意）timeout 直前に approve した場合: status は `APPROVED` のまま（`TIMED_OUT` に上書きされない）。`LOCK` は解放される
 
 ### 3. 占有中は2本目なし
 
