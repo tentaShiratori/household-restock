@@ -1,7 +1,7 @@
 [project]
 name = "household-restock"
-version = "0.2.0"
-description = "日用品自動補充ワークフロー学習用（v0.2.0: 承認待ち・品目占有。画面は未実装）"
+version = "0.3.0"
+description = "日用品自動補充ワークフロー学習用（v0.3.0: 最小画面と保護付き API）"
 requires-python = "==3.12.*"
 readme = "README.md"
 dependencies = []
@@ -50,6 +50,9 @@ omit = [
   "*/household_restock/handler.py",
   "*/household_restock/store_token.py",
   "*/household_restock/decision_api.py",
+  "*/household_restock/items_api.py",
+  "*/household_restock/aws_http_store.py",
+  "*/household_restock/local_server.py",
 ]
 
 [tool.coverage.report]
@@ -98,4 +101,7 @@ exclude = [
   "*/handler.py",
   "*/store_token.py",
   "*/decision_api.py",
+  "*/items_api.py",
+  "*/aws_http_store.py",
+  "*/local_server.py",
 ]

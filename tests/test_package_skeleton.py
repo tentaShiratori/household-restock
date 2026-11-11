@@ -9,5 +9,5 @@ def test_package_name() -> None:
     assert package_name() == "household-restock"
 
 
-def test_version_is_v0_2_0() -> None:
-    assert __version__ == "0.2.0"
+def test_version_is_v0_3_0() -> None:
+    assert __version__ == "0.3.0"

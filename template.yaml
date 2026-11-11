@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
-Description: household-restock v0.2.0 — approval wait, occupancy, no UI
+Description: household-restock v0.3.0 — minimal UI via localhost relay; protected APIs
 
 Parameters:
   DemoItemId:
@@ -96,6 +96,39 @@ Resources:
             Path: /items/{itemId}/restock-requests/{streamEventId}/decision
             Method: POST
 
+  ItemsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: household_restock.items_api.lambda_handler
+      Description: List items/restocks and update stock; shared secret required
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref HouseholdRestockTable
+          APPROVAL_SHARED_SECRET: !Ref ApprovalSharedSecret
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref HouseholdRestockTable
+      Events:
+        ListItems:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApprovalHttpApi
+            Path: /items
+            Method: GET
+        PutStock:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApprovalHttpApi
+            Path: /items/{itemId}/stock
+            Method: PUT
+        ListRestocks:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref ApprovalHttpApi
+            Path: /restock-requests
+            Method: GET
+
   RestockStateMachine:
     Type: AWS::Serverless::StateMachine
     Properties:
@@ -165,6 +198,12 @@ Outputs:
   ApprovalDecisionPathTemplate:
     Description: POST path template (add X-Approval-Secret header)
     Value: /items/{itemId}/restock-requests/{streamEventId}/decision
+  ItemsPath:
+    Description: GET /items (X-Approval-Secret required; use via localhost relay)
+    Value: /items
+  RestockRequestsPath:
+    Description: GET /restock-requests (X-Approval-Secret required)
+    Value: /restock-requests
   DemoItemId:
     Description: Demo item id
     Value: !Ref DemoItemId

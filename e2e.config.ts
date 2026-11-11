@@ -1,9 +1,42 @@
 import type { E2EConfig } from 'e2e';
+import { web } from '@e2e-dev/web';
 
-// Official shape from `e2e init --engine none --gateway none`.
-// No model / no browser engine: AI keys are not required.
-// Meaningful scenarios wait for the v0.3.0 minimal UI (see docs/plan).
-// Until then `e2e run` fails with NO_TESTS by design (do not use --pass-with-no-tests).
+// No AI model: tests use screen/expect only (no agent.* steps).
+// App is the localhost memory UI (no AWS).
 export default {
-  targets: [{ name: 'default', platform: 'custom' }],
+  tests: 'tests/**/*.e2e.ts',
+  workers: 1,
+  targets: [
+    {
+      name: 'default',
+      engine: web({ browser: 'chromium' }),
+      app: {
+        url: 'http://127.0.0.1:8765',
+        readyUrl: 'http://127.0.0.1:8765/',
+        command: {
+          executable: 'mise',
+          args: [
+            'exec',
+            '--',
+            'uv',
+            'run',
+            'python',
+            'scripts/serve-ui.py',
+            '--host',
+            '127.0.0.1',
+            '--port',
+            '8765',
+            '--backend',
+            'memory',
+          ],
+          env: {
+            UI_BACKEND: 'memory',
+          },
+          startupTimeout: 60_000,
+          log: '.e2e/logs/ui.log',
+          reuseExisting: true,
+        },
+      },
+    },
+  ],
 } satisfies E2EConfig;

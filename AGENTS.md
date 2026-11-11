@@ -20,7 +20,7 @@ mise install
 mise exec -- uv sync --locked
 mise exec -- npm ci
 ./scripts/check.sh
-# 期待末尾: OK: 品質チェック完了（AWS 未接続・業務機能未検証・e2e シナリオは未作成）
+# 期待末尾: OK: 品質チェック完了（AWS 未接続・AWS 上の業務検証は未実施）
 ```
 
 | 何 | ツールと版 | コマンド |
@@ -29,11 +29,11 @@ mise exec -- npm ci
 | lint / format | Ruff 0.14.3 | `ruff check .` / `ruff format --check .` |
 | deadcode | vulture 2.14 | `vulture src tests` |
 | typecheck | **ty 0.0.99**（Beta / 1.0 前） | `mise exec -- uv run ty check` |
-| e2e tooling | npm e2e 0.23.0 | `mise exec -- npm run e2e:version` / `e2e:doctor` |
+| e2e | npm e2e 0.23.0 + `@e2e-dev/web` 0.15.5 | `e2e:doctor` / `test:e2e`（localhost memory UI） |
 
 - coverage の測定対象は骨格 `src/household_restock` のみ。**業務品質を示さない**
 - ty は Astral 製。uv の dev 依存で固定。設定は `pyproject.toml` の `[tool.ty.*]`（全ルール error、警告も失敗、Python 3.12）
-- `mise exec -- npm run test:e2e` はシナリオ0件だと `NO_TESTS` で失敗する（公式どおり）。偽の合格にしない。シナリオは v0.3.0 画面以降
+- e2e は v0.3.0 の最小画面（memory 中継）を Chromium で叩く。AWS には繋がない。エージェント手順で `--pass-with-no-tests` は使わない
 - 環境スモークだけなら `./scripts/check-env.sh`
 - GitHub Actions CI は未導入（依頼があれば別 PR で提案）
 
