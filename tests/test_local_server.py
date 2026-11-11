@@ -36,6 +36,7 @@ def test_api_flow_and_secret_strip(tmp_path: Path) -> None:
     )
     assert status == 200
     assert approved["ok"] is True
+    assert approved["status"] == "SHIPPING_WAIT"
 
     status, conflict = app.handle_api(
         "POST",
@@ -44,6 +45,14 @@ def test_api_flow_and_secret_strip(tmp_path: Path) -> None:
     )
     assert status == 409
     assert conflict["ok"] is False
+
+    status, arrived = app.handle_api(
+        "POST",
+        f"/api/items/toilet-paper/restock-requests/{event_id}/advance-delivery",
+        b"{}",
+    )
+    assert status == 200
+    assert arrived["status"] == "ARRIVAL_CONFIRMED"
 
     leaked = strip_secrets({"taskToken": "abc", "itemId": "x", "ok": True})
     assert "taskToken" not in leaked

@@ -14,6 +14,8 @@ from household_restock.keys import (
     META_SK,
     item_pk,
 )
+from household_restock.order import normalize_failure_mode
+from household_restock.status_labels import label_for_status
 from household_restock.ui_api import strip_secrets
 from household_restock.ui_validation import parse_non_negative_int
 
@@ -93,11 +95,13 @@ def _list_items(table: Any) -> dict[str, object]:
         page = table.scan(**scan_kwargs)
         for raw in page.get("Items", []):
             try:
+                mode = raw.get("orderFailureMode", "succeed")
                 items.append(
                     {
                         "itemId": str(raw.get("itemId", "")),
                         "stock": _to_int(raw.get("stock", 0)),
                         "threshold": _to_int(raw.get("threshold", 0)),
+                        "orderFailureMode": normalize_failure_mode(mode),
                     }
                 )
             except ValueError:
@@ -121,11 +125,13 @@ def _list_restocks(table: Any) -> dict[str, object]:
             if str(raw.get("sk", "")) == LOCK_SK:
                 continue
             try:
+                status = str(raw.get("status", ""))
                 rows.append(
                     {
                         "itemId": str(raw.get("itemId", "")),
                         "streamEventId": str(raw.get("streamEventId", "")),
-                        "status": str(raw.get("status", "")),
+                        "status": status,
+                        "label": label_for_status(status),
                         "stock": _to_int(raw.get("stock", 0)),
                         "threshold": _to_int(raw.get("threshold", 0)),
                     }
@@ -165,6 +171,9 @@ def _put_stock(table: Any, *, item_id: str, event: dict[str, Any]) -> dict[str, 
     except ValueError:
         return _response(500, {"ok": False, "reason": "bad_item"})
 
+    mode = normalize_failure_mode(
+        payload.get("orderFailureMode", existing.get("orderFailureMode", "succeed"))
+    )
     table.put_item(
         Item={
             "pk": item_pk(item_id),
@@ -173,12 +182,18 @@ def _put_stock(table: Any, *, item_id: str, event: dict[str, Any]) -> dict[str, 
             "itemId": item_id,
             "stock": parsed.value,
             "threshold": threshold,
+            "orderFailureMode": mode,
         }
     )
     return _response(
         200,
         {
             "ok": True,
-            "item": {"itemId": item_id, "stock": parsed.value, "threshold": threshold},
+            "item": {
+                "itemId": item_id,
+                "stock": parsed.value,
+                "threshold": threshold,
+                "orderFailureMode": mode,
+            },
         },
     )

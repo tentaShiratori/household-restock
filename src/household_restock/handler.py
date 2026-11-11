@@ -6,12 +6,13 @@ import json
 import os
 from typing import Any
 
-from household_restock.keys import LOCK_SK, item_pk
+from household_restock.keys import LOCK_SK, META_SK, item_pk
 from household_restock.occupancy import (
     build_occupancy_put,
     occupancy_item_attrs,
     release_condition,
 )
+from household_restock.order import normalize_failure_mode
 from household_restock.stream import evaluate_dynamodb_record
 
 
@@ -81,11 +82,24 @@ def lambda_handler(event: dict[str, Any], context: object) -> dict[str, Any]:
                     continue
                 raise
 
+            failure_mode = normalize_failure_mode(
+                os.environ.get("DEMO_ORDER_FAILURE_MODE", "succeed")
+            )
+            try:
+                meta = table.get_item(
+                    Key={"pk": item_pk(start.item_id), "sk": META_SK}
+                ).get("Item")
+            except ClientError:
+                meta = None
+            if isinstance(meta, dict) and isinstance(meta.get("orderFailureMode"), str):
+                failure_mode = normalize_failure_mode(meta.get("orderFailureMode"))
+
             payload = {
                 "itemId": start.item_id,
                 "stock": start.stock,
                 "threshold": start.threshold,
                 "streamEventId": start.stream_event_id,
+                "orderFailureMode": failure_mode,
             }
             try:
                 sfn.start_execution(

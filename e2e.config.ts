@@ -34,7 +34,7 @@ export default {
           },
           startupTimeout: 60_000,
           log: '.e2e/logs/ui.log',
-          reuseExisting: true,
+          reuseExisting: false,
         },
       },
     },

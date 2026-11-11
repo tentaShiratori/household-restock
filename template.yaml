@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
-Description: household-restock v0.3.0 — minimal UI via localhost relay; protected APIs
+Description: household-restock v0.4.0 — mock order Retry/Catch and delivery Wait
 
 Parameters:
   DemoItemId:
@@ -13,6 +13,20 @@ Parameters:
     MinValue: 30
     MaxValue: 86400
     Description: waitForTaskToken timeout (shorten for AWS verify)
+  DeliveryWaitSeconds:
+    Type: Number
+    Default: 60
+    MinValue: 1
+    MaxValue: 86400
+    Description: Mock delivery wait length (shorten for AWS verify)
+  DemoOrderFailureMode:
+    Type: String
+    Default: succeed
+    AllowedValues:
+      - succeed
+      - transient_once
+      - permanent
+    Description: Default deterministic order failure mode when item has none
   StreamMaxRetryAttempts:
     Type: Number
     Default: 2
@@ -129,6 +143,20 @@ Resources:
             Path: /restock-requests
             Method: GET
 
+  OrderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: household_restock.order_lambda.lambda_handler
+      Description: Deterministic mock order (transient/permanent errors)
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref HouseholdRestockTable
+          DELIVERY_WAIT_SECONDS: !Ref DeliveryWaitSeconds
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref HouseholdRestockTable
+
   RestockStateMachine:
     Type: AWS::Serverless::StateMachine
     Properties:
@@ -137,6 +165,7 @@ Resources:
       DefinitionSubstitutions:
         TableName: !Ref HouseholdRestockTable
         StoreTokenFunctionArn: !GetAtt StoreTokenFunction.Arn
+        OrderFunctionArn: !GetAtt OrderFunction.Arn
         ApprovalTimeoutSeconds: !Ref ApprovalTimeoutSeconds
       Policies:
         - DynamoDBWritePolicy:
@@ -145,6 +174,8 @@ Resources:
             TableName: !Ref HouseholdRestockTable
         - LambdaInvokePolicy:
             FunctionName: !Ref StoreTokenFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref OrderFunction
 
   EvaluateStockFunction:
     Type: AWS::Serverless::Function
@@ -157,6 +188,7 @@ Resources:
           STATE_MACHINE_ARN: !Ref RestockStateMachine
           TABLE_NAME: !Ref HouseholdRestockTable
           DEMO_ITEM_ID: !Ref DemoItemId
+          DEMO_ORDER_FAILURE_MODE: !Ref DemoOrderFailureMode
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref HouseholdRestockTable
@@ -210,3 +242,9 @@ Outputs:
   ApprovalTimeoutSeconds:
     Description: Configured approval timeout
     Value: !Ref ApprovalTimeoutSeconds
+  DeliveryWaitSeconds:
+    Description: Configured mock delivery wait
+    Value: !Ref DeliveryWaitSeconds
+  DemoOrderFailureMode:
+    Description: Default deterministic order failure mode
+    Value: !Ref DemoOrderFailureMode
