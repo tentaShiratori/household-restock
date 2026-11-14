@@ -50,10 +50,45 @@ def test_wait_for_approval_catch_keeps_item_ids(asl: dict[str, Any]) -> None:
 def test_put_and_mark_states_preserve_input_on_catch(asl: dict[str, Any]) -> None:
     states = asl["States"]
     assert isinstance(states, dict)
-    for name in ("PutRestockRequest", "MarkTimedOut", "MarkFailed", "ReleaseLock"):
+    for name in (
+        "PutRestockRequest",
+        "MarkTimedOut",
+        "MarkFailed",
+        "MarkOrdering",
+        "PlaceOrder",
+        "CancelSkeleton",
+        "MarkShippingWait",
+        "ConfirmArrival",
+        "ReleaseLock",
+    ):
         state = states[name]
         assert isinstance(state, dict)
         assert_catch_preserves_input(name, state)
+
+
+def test_place_order_retry_and_catch_policy(asl: dict[str, Any]) -> None:
+    states = asl["States"]
+    assert isinstance(states, dict)
+    place = states["PlaceOrder"]
+    assert isinstance(place, dict)
+    retries = place.get("Retry") or []
+    assert isinstance(retries, list) and retries
+    assert "OrderTransientError" in (retries[0].get("ErrorEquals") or [])
+    errors = {
+        e
+        for c in catchers(place)
+        for e in (c.get("ErrorEquals") or [])
+        if isinstance(e, str)
+    }
+    assert "OrderPermanentError" in errors
+    assert "OrderTransientError" in errors
+    wait = states["WaitForDelivery"]
+    assert isinstance(wait, dict)
+    assert wait.get("Type") == "Wait"
+    assert wait.get("TimestampPath") == "$.order.arriveAt"
+    wait_approval = states["WaitForApproval"]
+    assert isinstance(wait_approval, dict)
+    assert wait_approval.get("Next") == "MarkOrdering"
 
 
 def test_mark_timed_out_does_not_overwrite_terminal(asl: dict[str, Any]) -> None:

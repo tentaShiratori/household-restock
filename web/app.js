@@ -69,6 +69,8 @@
         return "在庫は 0 以上の整数にしてください";
       case "not_found":
         return "対象が見つかりません";
+      case "not_shipping_wait":
+        return "配送待ちではありません";
       default:
         return reason || "失敗しました";
     }
@@ -93,19 +95,30 @@
       input.step = "1";
       input.value = String(item.stock);
       input.setAttribute("aria-label", `${item.itemId} の在庫`);
-      input.dataset.stockInput = item.itemId;
       stockTd.appendChild(input);
+
+      const modeTd = document.createElement("td");
+      const mode = document.createElement("select");
+      mode.setAttribute("aria-label", `${item.itemId} の注文失敗モード`);
+      for (const value of ["succeed", "transient_once", "permanent"]) {
+        const opt = document.createElement("option");
+        opt.value = value;
+        opt.textContent = value;
+        if ((item.orderFailureMode || "succeed") === value) opt.selected = true;
+        mode.appendChild(opt);
+      }
+      mode.addEventListener("change", () => onSaveMode(item.itemId, mode.value));
+      modeTd.appendChild(mode);
 
       const actionTd = document.createElement("td");
       const save = document.createElement("button");
       save.type = "button";
       save.textContent = "更新";
       save.dataset.action = "save";
-      save.dataset.itemId = item.itemId;
       save.addEventListener("click", () => onSaveStock(item.itemId, input));
       actionTd.appendChild(save);
 
-      tr.append(idTd, thTd, stockTd, actionTd);
+      tr.append(idTd, thTd, stockTd, modeTd, actionTd);
       itemsBody.appendChild(tr);
     }
   }
@@ -121,11 +134,16 @@
       const eventTd = document.createElement("td");
       eventTd.textContent = row.streamEventId;
       const statusTd = document.createElement("td");
-      statusTd.textContent = row.status;
+      const label = row.label || row.status;
+      statusTd.textContent = label;
       statusTd.dataset.status = row.status;
+      statusTd.dataset.label = label;
+      statusTd.setAttribute("data-testid", `status-${row.status}`);
 
       const actionTd = document.createElement("td");
       const awaiting = row.status === "AWAITING_APPROVAL";
+      const shipping = row.status === "SHIPPING_WAIT";
+
       const approve = document.createElement("button");
       approve.type = "button";
       approve.textContent = "承認";
@@ -134,6 +152,7 @@
       approve.addEventListener("click", () =>
         onDecision(row.itemId, row.streamEventId, "approve"),
       );
+
       const reject = document.createElement("button");
       reject.type = "button";
       reject.textContent = "却下";
@@ -142,11 +161,36 @@
       reject.addEventListener("click", () =>
         onDecision(row.itemId, row.streamEventId, "reject"),
       );
-      actionTd.append(approve, reject);
 
+      const advance = document.createElement("button");
+      advance.type = "button";
+      advance.textContent = "到着確認へ";
+      advance.dataset.action = "advance";
+      advance.disabled = !shipping;
+      advance.addEventListener("click", () =>
+        onAdvance(row.itemId, row.streamEventId),
+      );
+
+      actionTd.append(approve, reject, advance);
       tr.append(itemTd, eventTd, statusTd, actionTd);
       restockBody.appendChild(tr);
     }
+  }
+
+  function reapplyActionButtons() {
+    document.querySelectorAll("#restock-body tr").forEach((tr) => {
+      const status = tr.querySelector("[data-status]")?.getAttribute("data-status");
+      const awaiting = status === "AWAITING_APPROVAL";
+      const shipping = status === "SHIPPING_WAIT";
+      tr.querySelectorAll("button[data-action='approve'], button[data-action='reject']").forEach(
+        (btn) => {
+          btn.disabled = !awaiting;
+        },
+      );
+      tr.querySelectorAll("button[data-action='advance']").forEach((btn) => {
+        btn.disabled = !shipping;
+      });
+    });
   }
 
   async function reload() {
@@ -169,14 +213,7 @@
       setStatus("");
     } finally {
       setBusy(false);
-      // 承認待ち以外はボタン無効を再適用
-      document.querySelectorAll("#restock-body tr").forEach((tr) => {
-        const status = tr.querySelector("[data-status]")?.getAttribute("data-status");
-        const awaiting = status === "AWAITING_APPROVAL";
-        tr.querySelectorAll("button[data-action]").forEach((btn) => {
-          btn.disabled = !awaiting;
-        });
-      });
+      reapplyActionButtons();
     }
   }
 
@@ -208,6 +245,31 @@
     }
   }
 
+  async function onSaveMode(itemId, mode) {
+    showError("");
+    setBusy(true);
+    setStatus("送信中…");
+    try {
+      const { res, data } = await api(
+        "PUT",
+        `/api/items/${encodeURIComponent(itemId)}/order-failure-mode`,
+        { mode },
+      );
+      if (!res.ok) {
+        showError(reasonMessage(data.reason));
+        setStatus("");
+        return;
+      }
+      setStatus("注文失敗モードを更新しました");
+      await reload();
+    } catch (err) {
+      showError(err instanceof Error ? err.message : String(err));
+      setStatus("");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function onDecision(itemId, streamEventId, decision) {
     showError("");
     setBusy(true);
@@ -222,6 +284,29 @@
         return;
       }
       setStatus(decision === "approve" ? "承認しました" : "却下しました");
+      await reload();
+    } catch (err) {
+      showError(err instanceof Error ? err.message : String(err));
+      setStatus("");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onAdvance(itemId, streamEventId) {
+    showError("");
+    setBusy(true);
+    setStatus("送信中…");
+    try {
+      const path = `/api/items/${encodeURIComponent(itemId)}/restock-requests/${encodeURIComponent(streamEventId)}/advance-delivery`;
+      const { res, data } = await api("POST", path, {});
+      if (!res.ok) {
+        showError(reasonMessage(data.reason));
+        setStatus("");
+        await reload();
+        return;
+      }
+      setStatus("到着確認へ進めました");
       await reload();
     } catch (err) {
       showError(err instanceof Error ? err.message : String(err));

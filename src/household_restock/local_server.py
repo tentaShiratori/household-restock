@@ -14,7 +14,11 @@ from household_restock.ui_api import contains_forbidden_secret_text, json_body
 from household_restock.ui_validation import parse_non_negative_int
 
 STOCK_PATH = re.compile(r"^/api/items/([^/]+)/stock$")
+MODE_PATH = re.compile(r"^/api/items/([^/]+)/order-failure-mode$")
 DECISION_PATH = re.compile(r"^/api/items/([^/]+)/restock-requests/([^/]+)/decision$")
+ADVANCE_PATH = re.compile(
+    r"^/api/items/([^/]+)/restock-requests/([^/]+)/advance-delivery$"
+)
 
 
 class Store(Protocol):
@@ -26,6 +30,14 @@ class Store(Protocol):
 
     def decide(
         self, *, item_id: str, stream_event_id: str, decision: str
+    ) -> dict[str, Any]: ...
+
+    def set_order_failure_mode(
+        self, *, item_id: str, mode: object
+    ) -> dict[str, Any]: ...
+
+    def advance_delivery(
+        self, *, item_id: str, stream_event_id: str
     ) -> dict[str, Any]: ...
 
 
@@ -57,6 +69,21 @@ class UiApp:
             status = int(result.pop("httpStatus", 500))
             return status, result
 
+        mode_match = MODE_PATH.match(path)
+        if mode_match and method == "PUT":
+            item_id = mode_match.group(1)
+            try:
+                payload = json.loads(raw_body.decode("utf-8") or "{}")
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                return 400, {"ok": False, "reason": "bad_json"}
+            if not isinstance(payload, dict):
+                return 400, {"ok": False, "reason": "bad_json"}
+            result = self.store.set_order_failure_mode(
+                item_id=item_id, mode=payload.get("mode")
+            )
+            status = int(result.pop("httpStatus", 500))
+            return status, result
+
         decision_match = DECISION_PATH.match(path)
         if decision_match and method == "POST":
             item_id, event_id = decision_match.group(1), decision_match.group(2)
@@ -71,6 +98,15 @@ class UiApp:
                 return 400, {"ok": False, "reason": "invalid_decision"}
             result = self.store.decide(
                 item_id=item_id, stream_event_id=event_id, decision=decision
+            )
+            status = int(result.pop("httpStatus", 500))
+            return status, result
+
+        advance_match = ADVANCE_PATH.match(path)
+        if advance_match and method == "POST":
+            item_id, event_id = advance_match.group(1), advance_match.group(2)
+            result = self.store.advance_delivery(
+                item_id=item_id, stream_event_id=event_id
             )
             status = int(result.pop("httpStatus", 500))
             return status, result

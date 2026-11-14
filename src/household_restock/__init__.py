@@ -1,4 +1,4 @@
-"""日用品自動補充の共有ロジック（v0.3.0: 最小画面・保護付き API）。"""
+"""日用品自動補充の共有ロジック（v0.4.0: 模擬注文・Wait）。"""
 
 from __future__ import annotations
 
@@ -53,7 +53,7 @@ __all__ = [
     "stock_at_or_below_threshold",
 ]
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 
 def package_name() -> str:

@@ -51,6 +51,31 @@ class AwsHttpStore:
             include_status=True,
         )
 
+    def set_order_failure_mode(self, *, item_id: str, mode: object) -> dict[str, Any]:
+        items = self.list_items()
+        stock = None
+        for row in items:
+            if row.get("itemId") == item_id:
+                stock = row.get("stock")
+                break
+        if stock is None:
+            return {"ok": False, "reason": "not_found", "httpStatus": 404}
+        return self._request(
+            "PUT",
+            f"/items/{item_id}/stock",
+            body={"stock": stock, "orderFailureMode": mode},
+            include_status=True,
+        )
+
+    def advance_delivery(self, *, item_id: str, stream_event_id: str) -> dict[str, Any]:
+        del item_id, stream_event_id
+        # AWS では SFN Wait が進める。ローカル memory 専用 API。
+        return {
+            "ok": False,
+            "reason": "not_supported_on_aws",
+            "httpStatus": 501,
+        }
+
     def _request(
         self,
         method: str,

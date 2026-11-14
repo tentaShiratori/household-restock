@@ -1,5 +1,5 @@
 {
-  "Comment": "v0.2.0: record restock, wait for approval, release occupancy; never mutates stock",
+  "Comment": "v0.4.0: approval → mock order (Retry/Catch) → Wait → arrival confirm; stock unchanged",
   "StartAt": "PutRestockRequest",
   "States": {
     "PutRestockRequest": {
@@ -15,6 +15,7 @@
           "stock": { "N.$": "States.Format('{}', $.stock)" },
           "threshold": { "N.$": "States.Format('{}', $.threshold)" },
           "streamEventId": { "S.$": "$.streamEventId" },
+          "orderFailureMode": { "S.$": "$.orderFailureMode" },
           "status": { "S": "RECORDED" }
         },
         "ConditionExpression": "attribute_not_exists(pk) AND attribute_not_exists(sk)"
@@ -68,7 +69,7 @@
         }
       ],
       "ResultPath": "$.approvalResult",
-      "Next": "ReleaseLock"
+      "Next": "MarkOrdering"
     },
     "MarkTimedOut": {
       "Type": "Task",
@@ -138,6 +139,172 @@
       "ResultPath": "$.markFailed",
       "Next": "ReleaseLock"
     },
+    "MarkOrdering": {
+      "Type": "Task",
+      "Comment": "APPROVED → ORDERING after callback",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "${TableName}",
+        "Key": {
+          "pk": { "S.$": "States.Format('ITEM#{}', $.itemId)" },
+          "sk": { "S.$": "States.Format('RESTOCK#{}', $.streamEventId)" }
+        },
+        "UpdateExpression": "SET #s = :ordering",
+        "ConditionExpression": "#s = :approved",
+        "ExpressionAttributeNames": { "#s": "status" },
+        "ExpressionAttributeValues": {
+          ":ordering": { "S": "ORDERING" },
+          ":approved": { "S": "APPROVED" }
+        }
+      },
+      "Catch": [
+        {
+          "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"],
+          "ResultPath": "$.error",
+          "Next": "ReleaseLock"
+        },
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "CancelSkeleton"
+        }
+      ],
+      "ResultPath": "$.markOrdering",
+      "Next": "PlaceOrder"
+    },
+    "PlaceOrder": {
+      "Type": "Task",
+      "Comment": "OrderTransientError → Retry; OrderPermanentError → Catch cancel skeleton",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${OrderFunctionArn}",
+        "Payload": {
+          "itemId.$": "$.itemId",
+          "streamEventId.$": "$.streamEventId",
+          "orderFailureMode.$": "$.orderFailureMode"
+        }
+      },
+      "Retry": [
+        {
+          "ErrorEquals": ["OrderTransientError"],
+          "IntervalSeconds": 1,
+          "MaxAttempts": 2,
+          "BackoffRate": 1.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["OrderPermanentError"],
+          "ResultPath": "$.error",
+          "Next": "CancelSkeleton"
+        },
+        {
+          "ErrorEquals": ["OrderTransientError"],
+          "ResultPath": "$.error",
+          "Next": "CancelSkeleton",
+          "Comment": "Retries exhausted"
+        },
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "CancelSkeleton"
+        }
+      ],
+      "ResultSelector": {
+        "orderId.$": "$.Payload.orderId",
+        "arriveAt.$": "$.Payload.arriveAt"
+      },
+      "ResultPath": "$.order",
+      "Next": "MarkShippingWait"
+    },
+    "CancelSkeleton": {
+      "Type": "Task",
+      "Comment": "v0.4 cancel skeleton only; full compensation in v0.5.0",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "${TableName}",
+        "Key": {
+          "pk": { "S.$": "States.Format('ITEM#{}', $.itemId)" },
+          "sk": { "S.$": "States.Format('RESTOCK#{}', $.streamEventId)" }
+        },
+        "UpdateExpression": "SET #s = :failed",
+        "ExpressionAttributeNames": { "#s": "status" },
+        "ExpressionAttributeValues": {
+          ":failed": { "S": "ORDER_FAILED" }
+        }
+      },
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "ReleaseLock"
+        }
+      ],
+      "ResultPath": "$.cancelSkeleton",
+      "Next": "ReleaseLock"
+    },
+    "MarkShippingWait": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "${TableName}",
+        "Key": {
+          "pk": { "S.$": "States.Format('ITEM#{}', $.itemId)" },
+          "sk": { "S.$": "States.Format('RESTOCK#{}', $.streamEventId)" }
+        },
+        "UpdateExpression": "SET #s = :ship, arriveAt = :eta",
+        "ConditionExpression": "#s = :ordering",
+        "ExpressionAttributeNames": { "#s": "status" },
+        "ExpressionAttributeValues": {
+          ":ship": { "S": "SHIPPING_WAIT" },
+          ":ordering": { "S": "ORDERING" },
+          ":eta": { "S.$": "$.order.arriveAt" }
+        }
+      },
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "CancelSkeleton"
+        }
+      ],
+      "ResultPath": "$.markShipping",
+      "Next": "WaitForDelivery"
+    },
+    "WaitForDelivery": {
+      "Type": "Wait",
+      "Comment": "Datetime Wait via TimestampPath (shorten DeliveryWaitSeconds for verify)",
+      "TimestampPath": "$.order.arriveAt",
+      "Next": "ConfirmArrival"
+    },
+    "ConfirmArrival": {
+      "Type": "Task",
+      "Comment": "Arrival confirm only; stock add is v0.5.0",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "${TableName}",
+        "Key": {
+          "pk": { "S.$": "States.Format('ITEM#{}', $.itemId)" },
+          "sk": { "S.$": "States.Format('RESTOCK#{}', $.streamEventId)" }
+        },
+        "UpdateExpression": "SET #s = :arrived",
+        "ConditionExpression": "#s = :ship",
+        "ExpressionAttributeNames": { "#s": "status" },
+        "ExpressionAttributeValues": {
+          ":arrived": { "S": "ARRIVAL_CONFIRMED" },
+          ":ship": { "S": "SHIPPING_WAIT" }
+        }
+      },
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "ReleaseLock"
+        }
+      ],
+      "ResultPath": "$.confirmArrival",
+      "Next": "ReleaseLock"
+    },
     "ReleaseLock": {
       "Type": "Task",
       "Resource": "arn:aws:states:::dynamodb:deleteItem",
@@ -157,7 +324,7 @@
           "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"],
           "ResultPath": "$.error",
           "Next": "Done",
-          "Comment": "Lock already gone or owned by another eventId — occupancy not held by us"
+          "Comment": "Lock already gone or owned by another eventId"
         }
       ],
       "ResultPath": "$.releaseLock",

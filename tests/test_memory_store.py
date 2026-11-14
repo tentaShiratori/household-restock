@@ -18,7 +18,7 @@ def test_update_below_threshold_starts_one_restock() -> None:
     assert len(store.list_restocks()) == 1
 
 
-def test_reject_non_awaiting_and_approve() -> None:
+def test_reject_non_awaiting_and_approve_to_shipping() -> None:
     store = MemoryStore()
     store.seed_demo(stock=5, threshold=3)
     started = store.update_stock(item_id="toilet-paper", stock_raw=0)
@@ -31,12 +31,31 @@ def test_reject_non_awaiting_and_approve() -> None:
         item_id="toilet-paper", stream_event_id=event_id, decision="approve"
     )
     assert ok["ok"] is True
-    assert ok["status"] == "APPROVED"
+    assert ok["status"] == "SHIPPING_WAIT"
+    assert ok["label"] == "配送待ち"
+    assert "toilet-paper" in store.locks
     again = store.decide(
         item_id="toilet-paper", stream_event_id=event_id, decision="approve"
     )
     assert again["httpStatus"] == 409
     assert store.list_items()[0]["stock"] == 0
+    advanced = store.advance_delivery(item_id="toilet-paper", stream_event_id=event_id)
+    assert advanced["status"] == "ARRIVAL_CONFIRMED"
+    assert "toilet-paper" not in store.locks
+
+
+def test_permanent_order_failure() -> None:
+    store = MemoryStore()
+    store.seed_demo(stock=5, threshold=3)
+    store.set_order_failure_mode(item_id="toilet-paper", mode="permanent")
+    started = store.update_stock(item_id="toilet-paper", stock_raw=0)
+    event_id = started["restockStarted"]["streamEventId"]
+    ok = store.decide(
+        item_id="toilet-paper", stream_event_id=event_id, decision="approve"
+    )
+    assert ok["status"] == "ORDER_FAILED"
+    assert ok["label"] == "失敗"
+    assert "toilet-paper" not in store.locks
 
 
 def test_responses_never_include_task_token() -> None:

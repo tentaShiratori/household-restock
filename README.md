@@ -1,10 +1,10 @@
 # household-restock
 
-**次にやること:** 下の「1. 導入」→ `./scripts/check.sh` →（任意）`mise exec -- uv run python scripts/serve-ui.py` → 自分の AWS で [v0.3.0 検証](docs/aws-verify-v0.3.0.md)。
+**次にやること:** 下の「1. 導入」→ `./scripts/check.sh` →（任意）`mise exec -- uv run python scripts/serve-ui.py` → 自分の AWS で [v0.4.0 検証](docs/aws-verify-v0.4.0.md)。
 
 Lambda・Step Functions・DynamoDB を学ぶ日用品自動補充の練習用リポジトリ。  
-**いまあるもの:** [完成までの計画](docs/plan/README.md)、品質ツール、**v0.1.0〜v0.3.0**（判定・占有・承認・最小画面・`template.yaml`）。  
-**ないもの:** 注文/配送、AWS デプロイ済み環境（**エージェントは AWS に接続しない**）。v0.3.0 は **実装済み・AWS 検証待ち**。
+**いまあるもの:** [完成までの計画](docs/plan/README.md)、品質ツール、**v0.1.0〜v0.4.0**（判定・占有・承認・画面・模擬注文/Wait・`template.yaml`）。  
+**ないもの:** 在庫加算・補償完成、AWS デプロイ済み環境（**エージェントは AWS に接続しない**）。v0.4.0 は **実装済み・AWS 検証待ち**。
 
 ## ツールの役割（二重管理しない）
 
@@ -12,7 +12,7 @@ Lambda・Step Functions・DynamoDB を学ぶ日用品自動補充の練習用リ
 | --- | --- | --- |
 | ランタイム / CLI | `mise.toml` + `mise.lock` | Python **3.12.16**、Node **22.23.4**、`npm:skills` **1.7.6**、**uv 0.13.7** |
 | Python パッケージ | `pyproject.toml` + `uv.lock` | pytest / pytest-cov / Ruff / **ty** / vulture / **aws-sam-cli**、`src/household_restock` |
-| IaC（v0.3.0） | `template.yaml` + `statemachine/` | Streams・占有・承認待ち SFN・品目/承認 HTTP API |
+| IaC（v0.4.0） | `template.yaml` + `statemachine/` | Streams・占有・承認・模擬注文 Retry/Catch・配送 Wait |
 | 最小 UI | `web/` + `scripts/serve-ui.py` | localhost 中継（秘密はブラウザに出さない） |
 | e2e（npm） | `package.json` + `package-lock.json` | **e2e 0.23.0** + `@e2e-dev/web` 0.15.5（mise の npm ツールには載せない） |
 | 文書スキル | `.agents/skills/` + `skills-lock.json` | `i-have-adhd` / `yomiyasu`（手順は [AGENTS.md](AGENTS.md)） |
