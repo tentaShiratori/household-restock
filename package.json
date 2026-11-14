@@ -2,16 +2,19 @@
   "name": "household-restock",
   "private": true,
   "type": "module",
-  "description": "e2e runner only. Python tooling stays in uv / mise. Do not add business UI here yet.",
+  "description": "e2e runner for the v0.3.0 minimal UI. Python tooling stays in uv / mise.",
   "engines": {
     "node": "^22.22.3 || >=24.8.0"
   },
   "scripts": {
     "test:e2e": "E2E_TELEMETRY_DISABLED=1 DO_NOT_TRACK=1 e2e run",
     "e2e:doctor": "E2E_TELEMETRY_DISABLED=1 DO_NOT_TRACK=1 e2e doctor",
-    "e2e:version": "E2E_TELEMETRY_DISABLED=1 DO_NOT_TRACK=1 e2e --version"
+    "e2e:version": "E2E_TELEMETRY_DISABLED=1 DO_NOT_TRACK=1 e2e --version",
+    "e2e:install-browser": "E2E_TELEMETRY_DISABLED=1 DO_NOT_TRACK=1 e2e-web install chromium"
   },
   "devDependencies": {
-    "e2e": "0.23.0"
+    "@e2e-dev/web": "0.15.5",
+    "e2e": "0.23.0",
+    "playwright-core": "1.64.1"
   }
 }

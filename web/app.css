@@ -1,0 +1,63 @@
+/* 最小・装飾なし。学習用。 */
+body {
+  font-family: system-ui, sans-serif;
+  margin: 1rem;
+  line-height: 1.4;
+  color: #111;
+  background: #fff;
+}
+
+h1 {
+  font-size: 1.4rem;
+  margin: 0 0 0.25rem;
+}
+
+h2 {
+  font-size: 1.1rem;
+  margin: 1.25rem 0 0.5rem;
+}
+
+.lead {
+  margin: 0 0 1rem;
+  color: #333;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  max-width: 52rem;
+}
+
+th,
+td {
+  border: 1px solid #ccc;
+  padding: 0.35rem 0.5rem;
+  text-align: left;
+  vertical-align: middle;
+}
+
+input[type="number"] {
+  width: 5rem;
+}
+
+button {
+  margin-right: 0.25rem;
+}
+
+button:disabled {
+  opacity: 0.5;
+}
+
+#error:not([hidden]) {
+  color: #8b0000;
+}
+
+#status {
+  min-height: 1.25rem;
+}

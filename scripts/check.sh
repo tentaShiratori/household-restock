@@ -39,18 +39,23 @@ echo "== typecheck (ty; Beta / 0.0.x) =="
 mise exec -- uv run ty check
 # 期待: src/tests に型エラーなし。警告も error-on-warning で失敗扱い。
 
-echo "== e2e tooling (npm e2e@0.23.0, telemetry off, mise Node) =="
+echo "== e2e tooling (npm e2e@0.23.0 + @e2e-dev/web, telemetry off, mise Node) =="
 if [[ ! -d node_modules/e2e ]]; then
   echo "ERROR: node_modules/e2e がありません。先に mise exec -- npm ci を実行してください。" >&2
+  exit 1
+fi
+if [[ ! -d node_modules/@e2e-dev/web ]]; then
+  echo "ERROR: node_modules/@e2e-dev/web がありません。先に mise exec -- npm ci を実行してください。" >&2
   exit 1
 fi
 # mise 固定の Node / npm を使う（PATH 上の別 Node に依存しない）
 mise exec -- npm run e2e:version
 # 期待: 0.23.0
 mise exec -- npm run e2e:doctor
-# 期待: exit 0（シナリオ0件でも doctor は通る）
-#
-# 注意: mise exec -- npm run test:e2e (= e2e run) はシナリオ0件だと公式どおり NO_TESTS で失敗する。
-# --pass-with-no-tests で偽の合格にしない。意味のあるシナリオは v0.3.0 の画面以降。
+# Chromium が無ければ入れる（初回のみダウンロード）
+mise exec -- npm run e2e:install-browser
+echo "== e2e scenarios (localhost memory UI, no AWS) =="
+mise exec -- npm run test:e2e
+# 期待: tests/**/*.e2e.ts が通る。AWS には接続しない。
 
-echo "OK: 品質チェック完了（AWS 未接続・業務機能未検証・e2e シナリオは未作成）"
+echo "OK: 品質チェック完了（AWS 未接続・AWS 上の業務検証は未実施）"
