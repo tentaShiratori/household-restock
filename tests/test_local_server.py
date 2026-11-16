@@ -52,7 +52,7 @@ def test_api_flow_and_secret_strip(tmp_path: Path) -> None:
         b"{}",
     )
     assert status == 200
-    assert arrived["status"] == "ARRIVAL_CONFIRMED"
+    assert arrived["status"] == "COMPLETED"
 
     leaked = strip_secrets({"taskToken": "abc", "itemId": "x", "ok": True})
     assert "taskToken" not in leaked

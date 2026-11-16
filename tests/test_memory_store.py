@@ -1,4 +1,4 @@
-"""メモリ backend の在庫更新・承認・秘密非露出。"""
+"""メモリ backend の在庫更新・承認・冪等加算・補償・秘密非露出。"""
 
 from __future__ import annotations
 
@@ -40,11 +40,28 @@ def test_reject_non_awaiting_and_approve_to_shipping() -> None:
     assert again["httpStatus"] == 409
     assert store.list_items()[0]["stock"] == 0
     advanced = store.advance_delivery(item_id="toilet-paper", stream_event_id=event_id)
-    assert advanced["status"] == "ARRIVAL_CONFIRMED"
+    assert advanced["status"] == "COMPLETED"
+    assert "toilet-paper" not in store.locks
+    assert store.list_items()[0]["stock"] == 10
+
+
+def test_arrival_twice_adds_stock_once() -> None:
+    store = MemoryStore(restock_qty=10)
+    store.seed_demo(stock=5, threshold=3)
+    started = store.update_stock(item_id="toilet-paper", stock_raw=0)
+    event_id = started["restockStarted"]["streamEventId"]
+    store.decide(item_id="toilet-paper", stream_event_id=event_id, decision="approve")
+    first = store.notify_arrival(item_id="toilet-paper", stream_event_id=event_id)
+    assert first["stockAppliedThisCall"] is True
+    assert first["status"] == "COMPLETED"
+    assert store.list_items()[0]["stock"] == 10
+    second = store.notify_arrival(item_id="toilet-paper", stream_event_id=event_id)
+    assert second["stockAppliedThisCall"] is False
+    assert store.list_items()[0]["stock"] == 10
     assert "toilet-paper" not in store.locks
 
 
-def test_permanent_order_failure() -> None:
+def test_permanent_order_failure_runs_compensation() -> None:
     store = MemoryStore()
     store.seed_demo(stock=5, threshold=3)
     store.set_order_failure_mode(item_id="toilet-paper", mode="permanent")
@@ -53,9 +70,28 @@ def test_permanent_order_failure() -> None:
     ok = store.decide(
         item_id="toilet-paper", stream_event_id=event_id, decision="approve"
     )
-    assert ok["status"] == "ORDER_FAILED"
-    assert ok["label"] == "失敗"
+    assert ok["status"] == "CANCELLED"
+    assert ok["label"] == "取消済み"
     assert "toilet-paper" not in store.locks
+    retry = store.retry_compensation(item_id="toilet-paper", stream_event_id=event_id)
+    assert retry["orderCancelApplied"] is False
+    assert retry["restockCancelApplied"] is False
+    assert retry["status"] == "CANCELLED"
+
+
+def test_not_arrived_compensates_and_allows_next_restock() -> None:
+    store = MemoryStore()
+    store.seed_demo(stock=5, threshold=3)
+    store.set_delivery_outcome(item_id="toilet-paper", outcome="not_arrived")
+    started = store.update_stock(item_id="toilet-paper", stock_raw=0)
+    event_id = started["restockStarted"]["streamEventId"]
+    store.decide(item_id="toilet-paper", stream_event_id=event_id, decision="approve")
+    done = store.advance_delivery(item_id="toilet-paper", stream_event_id=event_id)
+    assert done["status"] == "CANCELLED"
+    assert store.list_items()[0]["stock"] == 0
+    assert "toilet-paper" not in store.locks
+    again = store.update_stock(item_id="toilet-paper", stock_raw=0)
+    assert again["restockStarted"] is not None
 
 
 def test_responses_never_include_task_token() -> None:
