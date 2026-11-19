@@ -40,7 +40,7 @@ test('approve reaches shipping wait without leaking secrets', async ({
     .filter({ has: screen.getByTestId('status-SHIPPING_WAIT') })
     .getByRole('button', '到着確認へ')
     .tap();
-  await expect(screen.getByTestId('status-ARRIVAL_CONFIRMED')).toBeVisible();
+  await expect(screen.getByTestId('status-COMPLETED')).toBeVisible();
 });
 
 test('reject path and permanent failure labels', async ({ app, screen }) => {
@@ -70,8 +70,8 @@ test('reject path and permanent failure labels', async ({ app, screen }) => {
     .filter({ has: screen.getByTestId('status-AWAITING_APPROVAL') })
     .getByRole('button', '承認')
     .tap();
-  await expect(screen.getByTestId('status-ORDER_FAILED')).toBeVisible();
-  await expect(screen.getByText('失敗')).toBeVisible();
+  await expect(screen.getByTestId('status-CANCELLED')).toBeVisible();
+  await expect(screen.getByText('取消済み')).toBeVisible();
 });
 
 test('advance delivery from shipping wait', async ({ app, screen }) => {
@@ -93,6 +93,7 @@ test('advance delivery from shipping wait', async ({ app, screen }) => {
     .filter({ has: screen.getByTestId('status-SHIPPING_WAIT') })
     .getByRole('button', '到着確認へ')
     .tap();
-  await expect(screen.getByTestId('status-ARRIVAL_CONFIRMED')).toBeVisible();
-  await expect(screen.getByText('到着確認')).toBeVisible();
+  await expect(screen.getByTestId('status-COMPLETED')).toBeVisible();
+  await expect(screen.getByText('完了')).toBeVisible();
+  await expect(screen.getByLabel('toilet-paper の在庫')).toHaveValue('10');
 });

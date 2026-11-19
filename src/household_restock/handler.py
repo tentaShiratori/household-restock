@@ -13,6 +13,10 @@ from household_restock.occupancy import (
     release_condition,
 )
 from household_restock.order import normalize_failure_mode
+from household_restock.stock_apply import (
+    normalize_delivery_outcome,
+    normalize_restock_qty,
+)
 from household_restock.stream import evaluate_dynamodb_record
 
 
@@ -85,14 +89,27 @@ def lambda_handler(event: dict[str, Any], context: object) -> dict[str, Any]:
             failure_mode = normalize_failure_mode(
                 os.environ.get("DEMO_ORDER_FAILURE_MODE", "succeed")
             )
+            delivery_outcome = normalize_delivery_outcome(
+                os.environ.get("DEMO_DELIVERY_OUTCOME", "arrived")
+            )
+            restock_qty = normalize_restock_qty(
+                os.environ.get("RESTOCK_QUANTITY", "10")
+            )
             try:
                 meta = table.get_item(
                     Key={"pk": item_pk(start.item_id), "sk": META_SK}
                 ).get("Item")
             except ClientError:
                 meta = None
-            if isinstance(meta, dict) and isinstance(meta.get("orderFailureMode"), str):
-                failure_mode = normalize_failure_mode(meta.get("orderFailureMode"))
+            if isinstance(meta, dict):
+                if isinstance(meta.get("orderFailureMode"), str):
+                    failure_mode = normalize_failure_mode(meta.get("orderFailureMode"))
+                if meta.get("deliveryOutcome") is not None:
+                    delivery_outcome = normalize_delivery_outcome(
+                        meta.get("deliveryOutcome")
+                    )
+                if meta.get("restockQty") is not None:
+                    restock_qty = normalize_restock_qty(meta.get("restockQty"))
 
             payload = {
                 "itemId": start.item_id,
@@ -100,6 +117,8 @@ def lambda_handler(event: dict[str, Any], context: object) -> dict[str, Any]:
                 "threshold": start.threshold,
                 "streamEventId": start.stream_event_id,
                 "orderFailureMode": failure_mode,
+                "deliveryOutcome": delivery_outcome,
+                "restockQty": restock_qty,
             }
             try:
                 sfn.start_execution(

@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
-Description: household-restock v0.4.0 — mock order Retry/Catch and delivery Wait
+Description: household-restock v0.5.0 — idempotent stock add and compensation
 
 Parameters:
   DemoItemId:
@@ -19,6 +19,12 @@ Parameters:
     MinValue: 1
     MaxValue: 86400
     Description: Mock delivery wait length (shorten for AWS verify)
+  RestockQuantity:
+    Type: Number
+    Default: 10
+    MinValue: 1
+    MaxValue: 10000
+    Description: Units added to META.stock on successful arrival (idempotent)
   DemoOrderFailureMode:
     Type: String
     Default: succeed
@@ -27,6 +33,13 @@ Parameters:
       - transient_once
       - permanent
     Description: Default deterministic order failure mode when item has none
+  DemoDeliveryOutcome:
+    Type: String
+    Default: arrived
+    AllowedValues:
+      - arrived
+      - not_arrived
+    Description: Mock delivery outcome after Wait (not_arrived → compensation)
   StreamMaxRetryAttempts:
     Type: Number
     Default: 2
@@ -172,6 +185,11 @@ Resources:
             TableName: !Ref HouseholdRestockTable
         - DynamoDBReadPolicy:
             TableName: !Ref HouseholdRestockTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:TransactWriteItems
+              Resource: !GetAtt HouseholdRestockTable.Arn
         - LambdaInvokePolicy:
             FunctionName: !Ref StoreTokenFunction
         - LambdaInvokePolicy:
@@ -189,6 +207,8 @@ Resources:
           TABLE_NAME: !Ref HouseholdRestockTable
           DEMO_ITEM_ID: !Ref DemoItemId
           DEMO_ORDER_FAILURE_MODE: !Ref DemoOrderFailureMode
+          DEMO_DELIVERY_OUTCOME: !Ref DemoDeliveryOutcome
+          RESTOCK_QUANTITY: !Ref RestockQuantity
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref HouseholdRestockTable
@@ -248,3 +268,9 @@ Outputs:
   DemoOrderFailureMode:
     Description: Default deterministic order failure mode
     Value: !Ref DemoOrderFailureMode
+  DemoDeliveryOutcome:
+    Description: Default mock delivery outcome after Wait
+    Value: !Ref DemoDeliveryOutcome
+  RestockQuantity:
+    Description: Units added on successful arrival
+    Value: !Ref RestockQuantity

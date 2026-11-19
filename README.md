@@ -1,10 +1,10 @@
 # household-restock
 
-**次にやること:** 下の「1. 導入」→ `./scripts/check.sh` →（任意）`mise exec -- uv run python scripts/serve-ui.py` → 自分の AWS で [v0.4.0 検証](docs/aws-verify-v0.4.0.md)。
+**次にやること:** 下の「1. 導入」→ `./scripts/check.sh` →（任意）`mise exec -- uv run python scripts/serve-ui.py` → 自分の AWS で [v0.5.0 検証](docs/aws-verify-v0.5.0.md)。
 
 Lambda・Step Functions・DynamoDB を学ぶ日用品自動補充の練習用リポジトリ。  
-**いまあるもの:** [完成までの計画](docs/plan/README.md)、品質ツール、**v0.1.0〜v0.4.0**（判定・占有・承認・画面・模擬注文/Wait・`template.yaml`）。  
-**ないもの:** 在庫加算・補償完成、AWS デプロイ済み環境（**エージェントは AWS に接続しない**）。v0.4.0 は **実装済み・AWS 検証待ち**。
+**いまあるもの:** [完成までの計画](docs/plan/README.md)、品質ツール、**v0.1.0〜v0.5.0**（判定・占有・承認・画面・模擬注文/Wait・冪等加算・補償・`template.yaml`）。  
+**ないもの:** AWS デプロイ済み環境（**エージェントは AWS に接続しない**）。v0.5.0 は **実装済み・AWS 検証待ち**。
 
 ## ツールの役割（二重管理しない）
 
@@ -12,7 +12,7 @@ Lambda・Step Functions・DynamoDB を学ぶ日用品自動補充の練習用リ
 | --- | --- | --- |
 | ランタイム / CLI | `mise.toml` + `mise.lock` | Python **3.12.16**、Node **22.23.4**、`npm:skills` **1.7.6**、**uv 0.13.7** |
 | Python パッケージ | `pyproject.toml` + `uv.lock` | pytest / pytest-cov / Ruff / **ty** / vulture / **aws-sam-cli**、`src/household_restock` |
-| IaC（v0.4.0） | `template.yaml` + `statemachine/` | Streams・占有・承認・模擬注文 Retry/Catch・配送 Wait |
+| IaC（v0.5.0） | `template.yaml` + `statemachine/` | Streams・占有・承認・注文・Wait・冪等加算・補償 |
 | 最小 UI | `web/` + `scripts/serve-ui.py` | localhost 中継（秘密はブラウザに出さない） |
 | e2e（npm） | `package.json` + `package-lock.json` | **e2e 0.23.0** + `@e2e-dev/web` 0.15.5（mise の npm ツールには載せない） |
 | 文書スキル | `.agents/skills/` + `skills-lock.json` | `i-have-adhd` / `yomiyasu`（手順は [AGENTS.md](AGENTS.md)） |
@@ -115,8 +115,7 @@ mise exec -- skills list
 
 - パッケージはユーザー指定の npm [`e2e`](https://www.npmjs.com/package/e2e) **0.23.0**（tester-army、Apache-2.0）
 - 設定は `e2e.config.ts`（`init --engine none --gateway none` 相当）。画面やテスト用アプリは作っていない
-- **意味のあるシナリオは [v0.3.0](docs/plan/v0.3.0.md) の最小画面ができてから書く**
-- いま `mise exec -- npm run test:e2e`（`e2e run`）はシナリオ0件のため公式どおり `NO_TESTS` で失敗する。`--pass-with-no-tests` で偽の合格にはしない
+- シナリオは [v0.3.0](docs/plan/v0.3.0.md) 以降の最小画面向け（`tests/ui.e2e.ts`）。`./scripts/check.sh` 内で実行する
 - GitHub Actions の CI 追加は今回の範囲外（必要なら別途提案）
 
 ### SAM（ローカル）
@@ -134,21 +133,19 @@ APPROVAL_SHARED_SECRET='…' \
   ./scripts/decide-restock.sh "<ApprovalApiUrl>" toilet-paper "<streamEventId>" approve
 ```
 
-- v0.1: [docs/aws-verify-v0.1.0.md](docs/aws-verify-v0.1.0.md) / [キー](docs/plan/v0.1.0-keys.md)
-- v0.2: [docs/aws-verify-v0.2.0.md](docs/aws-verify-v0.2.0.md) / [設計](docs/plan/v0.2.0-design.md)
+- v0.1〜v0.5: [docs/aws-verify-v0.5.0.md](docs/aws-verify-v0.5.0.md)（最新）。設計は [docs/plan/v0.5.0-design.md](docs/plan/v0.5.0-design.md)
 - deploy 時の `ApprovalSharedSecret` は NoEcho。リポジトリに書かない
 
 ### やっていないこと / 未検証
 
 - AWS 認証・デプロイ・課金操作（エージェントは実施しない）
-- 承認 timeout・占有・callback の **AWS 上の確認は未検証**
-- 画面・模擬注文以降は未実装
+- v0.1.0〜v0.5.0 の **AWS 上の業務確認は未検証**（実装済み・AWS 検証待ち）
 
 ## 3. 関連リンク
 
 - [docs/plan/README.md](docs/plan/README.md) … 全体ロードマップと要件追跡
-- [docs/plan/v0.2.0.md](docs/plan/v0.2.0.md) … 承認と占有（実装済み・AWS 検証待ち）
-- [docs/aws-verify-v0.2.0.md](docs/aws-verify-v0.2.0.md) … ユーザー向け AWS 確認手順
+- [docs/plan/v0.5.0.md](docs/plan/v0.5.0.md) … 冪等加算と補償
+- [docs/aws-verify-v0.5.0.md](docs/aws-verify-v0.5.0.md) … ユーザー向け AWS 確認手順
 - [AGENTS.md](AGENTS.md) … 文書スキルと品質コマンド
 - [docs/skills-sources.md](docs/skills-sources.md) … skill のソース commit / ライセンス
 

@@ -1,5 +1,5 @@
 {
-  "Comment": "v0.4.0: approval → mock order (Retry/Catch) → Wait → arrival confirm; stock unchanged",
+  "Comment": "v0.5.0: approval → order → Wait → idempotent stock add or compensation → ReleaseLock",
   "StartAt": "PutRestockRequest",
   "States": {
     "PutRestockRequest": {
@@ -16,6 +16,8 @@
           "threshold": { "N.$": "States.Format('{}', $.threshold)" },
           "streamEventId": { "S.$": "$.streamEventId" },
           "orderFailureMode": { "S.$": "$.orderFailureMode" },
+          "deliveryOutcome": { "S.$": "$.deliveryOutcome" },
+          "restockQty": { "N.$": "States.Format('{}', $.restockQty)" },
           "status": { "S": "RECORDED" }
         },
         "ConditionExpression": "attribute_not_exists(pk) AND attribute_not_exists(sk)"
@@ -166,7 +168,7 @@
         {
           "ErrorEquals": ["States.ALL"],
           "ResultPath": "$.error",
-          "Next": "CancelSkeleton"
+          "Next": "CancelOrder"
         }
       ],
       "ResultPath": "$.markOrdering",
@@ -174,7 +176,7 @@
     },
     "PlaceOrder": {
       "Type": "Task",
-      "Comment": "OrderTransientError → Retry; OrderPermanentError → Catch cancel skeleton",
+      "Comment": "OrderTransientError → Retry; permanent/exhausted → CancelOrder",
       "Resource": "arn:aws:states:::lambda:invoke",
       "Parameters": {
         "FunctionName": "${OrderFunctionArn}",
@@ -196,18 +198,18 @@
         {
           "ErrorEquals": ["OrderPermanentError"],
           "ResultPath": "$.error",
-          "Next": "CancelSkeleton"
+          "Next": "CancelOrder"
         },
         {
           "ErrorEquals": ["OrderTransientError"],
           "ResultPath": "$.error",
-          "Next": "CancelSkeleton",
+          "Next": "CancelOrder",
           "Comment": "Retries exhausted"
         },
         {
           "ErrorEquals": ["States.ALL"],
           "ResultPath": "$.error",
-          "Next": "CancelSkeleton"
+          "Next": "CancelOrder"
         }
       ],
       "ResultSelector": {
@@ -217,9 +219,9 @@
       "ResultPath": "$.order",
       "Next": "MarkShippingWait"
     },
-    "CancelSkeleton": {
+    "CancelOrder": {
       "Type": "Task",
-      "Comment": "v0.4 cancel skeleton only; full compensation in v0.5.0",
+      "Comment": "補償1: 注文取消（冪等フラグ orderCancelled）",
       "Resource": "arn:aws:states:::dynamodb:updateItem",
       "Parameters": {
         "TableName": "${TableName}",
@@ -227,20 +229,62 @@
           "pk": { "S.$": "States.Format('ITEM#{}', $.itemId)" },
           "sk": { "S.$": "States.Format('RESTOCK#{}', $.streamEventId)" }
         },
-        "UpdateExpression": "SET #s = :failed",
-        "ExpressionAttributeNames": { "#s": "status" },
+        "UpdateExpression": "SET orderCancelled = :true",
+        "ConditionExpression": "attribute_not_exists(orderCancelled) OR orderCancelled = :false",
         "ExpressionAttributeValues": {
-          ":failed": { "S": "ORDER_FAILED" }
+          ":true": { "BOOL": true },
+          ":false": { "BOOL": false }
         }
       },
       "Catch": [
+        {
+          "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"],
+          "ResultPath": "$.error",
+          "Next": "CancelRestockRequest",
+          "Comment": "Already cancelled; continue saga"
+        },
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "CancelRestockRequest"
+        }
+      ],
+      "ResultPath": "$.cancelOrder",
+      "Next": "CancelRestockRequest"
+    },
+    "CancelRestockRequest": {
+      "Type": "Task",
+      "Comment": "補償2: 補充リクエスト取消（冪等フラグ restockCancelled）",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "${TableName}",
+        "Key": {
+          "pk": { "S.$": "States.Format('ITEM#{}', $.itemId)" },
+          "sk": { "S.$": "States.Format('RESTOCK#{}', $.streamEventId)" }
+        },
+        "UpdateExpression": "SET restockCancelled = :true, #s = :cancelled",
+        "ConditionExpression": "attribute_not_exists(restockCancelled) OR restockCancelled = :false",
+        "ExpressionAttributeNames": { "#s": "status" },
+        "ExpressionAttributeValues": {
+          ":true": { "BOOL": true },
+          ":false": { "BOOL": false },
+          ":cancelled": { "S": "CANCELLED" }
+        }
+      },
+      "Catch": [
+        {
+          "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"],
+          "ResultPath": "$.error",
+          "Next": "ReleaseLock",
+          "Comment": "Already cancelled; still release occupancy"
+        },
         {
           "ErrorEquals": ["States.ALL"],
           "ResultPath": "$.error",
           "Next": "ReleaseLock"
         }
       ],
-      "ResultPath": "$.cancelSkeleton",
+      "ResultPath": "$.cancelRestock",
       "Next": "ReleaseLock"
     },
     "MarkShippingWait": {
@@ -265,7 +309,7 @@
         {
           "ErrorEquals": ["States.ALL"],
           "ResultPath": "$.error",
-          "Next": "CancelSkeleton"
+          "Next": "CancelOrder"
         }
       ],
       "ResultPath": "$.markShipping",
@@ -275,11 +319,23 @@
       "Type": "Wait",
       "Comment": "Datetime Wait via TimestampPath (shorten DeliveryWaitSeconds for verify)",
       "TimestampPath": "$.order.arriveAt",
-      "Next": "ConfirmArrival"
+      "Next": "ChooseDeliveryOutcome"
+    },
+    "ChooseDeliveryOutcome": {
+      "Type": "Choice",
+      "Comment": "Test input deliveryOutcome=not_arrived → compensation; else arrive",
+      "Choices": [
+        {
+          "Variable": "$.deliveryOutcome",
+          "StringEquals": "not_arrived",
+          "Next": "CancelOrder"
+        }
+      ],
+      "Default": "ConfirmArrival"
     },
     "ConfirmArrival": {
       "Type": "Task",
-      "Comment": "Arrival confirm only; stock add is v0.5.0",
+      "Comment": "SHIPPING_WAIT → ARRIVAL_CONFIRMED; stock add is ApplyStock",
       "Resource": "arn:aws:states:::dynamodb:updateItem",
       "Parameters": {
         "TableName": "${TableName}",
@@ -297,12 +353,78 @@
       },
       "Catch": [
         {
+          "ErrorEquals": ["DynamoDB.ConditionalCheckFailedException"],
+          "ResultPath": "$.error",
+          "Next": "ApplyStock",
+          "Comment": "Already confirmed; still try idempotent apply"
+        },
+        {
           "ErrorEquals": ["States.ALL"],
           "ResultPath": "$.error",
           "Next": "ReleaseLock"
         }
       ],
       "ResultPath": "$.confirmArrival",
+      "Next": "ApplyStock"
+    },
+    "ApplyStock": {
+      "Type": "Task",
+      "Comment": "Transact: claim stockApplied + ADD META.stock (no Lambda)",
+      "Resource": "arn:aws:states:::aws-sdk:dynamodb:transactWriteItems",
+      "Parameters": {
+        "TransactItems": [
+          {
+            "Update": {
+              "TableName": "${TableName}",
+              "Key": {
+                "pk": { "S.$": "States.Format('ITEM#{}', $.itemId)" },
+                "sk": { "S.$": "States.Format('RESTOCK#{}', $.streamEventId)" }
+              },
+              "UpdateExpression": "SET stockApplied = :true, #s = :completed",
+              "ConditionExpression": "attribute_not_exists(stockApplied) AND #s = :arrived",
+              "ExpressionAttributeNames": { "#s": "status" },
+              "ExpressionAttributeValues": {
+                ":true": { "BOOL": true },
+                ":completed": { "S": "COMPLETED" },
+                ":arrived": { "S": "ARRIVAL_CONFIRMED" }
+              }
+            }
+          },
+          {
+            "Update": {
+              "TableName": "${TableName}",
+              "Key": {
+                "pk": { "S.$": "States.Format('ITEM#{}', $.itemId)" },
+                "sk": { "S": "META" }
+              },
+              "UpdateExpression": "ADD stock :qty",
+              "ConditionExpression": "attribute_exists(pk)",
+              "ExpressionAttributeValues": {
+                ":qty": { "N.$": "States.Format('{}', $.restockQty)" }
+              }
+            }
+          }
+        ]
+      },
+      "Catch": [
+        {
+          "ErrorEquals": ["DynamoDB.TransactionCanceledException"],
+          "ResultPath": "$.error",
+          "Next": "StockAlreadyApplied",
+          "Comment": "Second arrival / already claimed → no double ADD"
+        },
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "ReleaseLock"
+        }
+      ],
+      "ResultPath": "$.applyStock",
+      "Next": "ReleaseLock"
+    },
+    "StockAlreadyApplied": {
+      "Type": "Pass",
+      "Comment": "Idempotent skip after duplicate arrival notification",
       "Next": "ReleaseLock"
     },
     "ReleaseLock": {

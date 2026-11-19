@@ -56,9 +56,11 @@ def test_put_and_mark_states_preserve_input_on_catch(asl: dict[str, Any]) -> Non
         "MarkFailed",
         "MarkOrdering",
         "PlaceOrder",
-        "CancelSkeleton",
+        "CancelOrder",
+        "CancelRestockRequest",
         "MarkShippingWait",
         "ConfirmArrival",
+        "ApplyStock",
         "ReleaseLock",
     ):
         state = states[name]
@@ -82,13 +84,41 @@ def test_place_order_retry_and_catch_policy(asl: dict[str, Any]) -> None:
     }
     assert "OrderPermanentError" in errors
     assert "OrderTransientError" in errors
+    for catcher in catchers(place):
+        assert catcher.get("Next") == "CancelOrder"
     wait = states["WaitForDelivery"]
     assert isinstance(wait, dict)
     assert wait.get("Type") == "Wait"
     assert wait.get("TimestampPath") == "$.order.arriveAt"
+    assert wait.get("Next") == "ChooseDeliveryOutcome"
     wait_approval = states["WaitForApproval"]
     assert isinstance(wait_approval, dict)
     assert wait_approval.get("Next") == "MarkOrdering"
+
+
+def test_apply_stock_and_compensation_chain(asl: dict[str, Any]) -> None:
+    from household_restock.compensation import COMPENSATION_STATE_ORDER
+
+    states = asl["States"]
+    assert isinstance(states, dict)
+    assert "CancelSkeleton" not in states
+    apply = states["ApplyStock"]
+    assert isinstance(apply, dict)
+    assert apply.get("Resource") == (
+        "arn:aws:states:::aws-sdk:dynamodb:transactWriteItems"
+    )
+    cancel_order = states["CancelOrder"]
+    assert isinstance(cancel_order, dict)
+    assert cancel_order.get("Next") == "CancelRestockRequest"
+    cancel_restock = states["CancelRestockRequest"]
+    assert isinstance(cancel_restock, dict)
+    assert cancel_restock.get("Next") == "ReleaseLock"
+    assert COMPENSATION_STATE_ORDER[0] in states
+    assert COMPENSATION_STATE_ORDER[1] in states
+    choice = states["ChooseDeliveryOutcome"]
+    assert isinstance(choice, dict)
+    assert choice.get("Type") == "Choice"
+    assert choice.get("Default") == "ConfirmArrival"
 
 
 def test_mark_timed_out_does_not_overwrite_terminal(asl: dict[str, Any]) -> None:
