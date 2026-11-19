@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
-Description: household-restock v0.5.0 — idempotent stock add and compensation
+Description: household-restock v1.0.0 — acceptance baseline (SFN + SAM + minimal UI)
 
 Parameters:
   DemoItemId:

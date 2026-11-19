@@ -1,10 +1,10 @@
 # household-restock
 
-**次にやること:** 下の「1. 導入」→ `./scripts/check.sh` →（任意）`mise exec -- uv run python scripts/serve-ui.py` → 自分の AWS で [v0.5.0 検証](docs/aws-verify-v0.5.0.md)。
+**次にやること:** 下の「1. 導入」→ `./scripts/check.sh` →（任意）`mise exec -- uv run python scripts/serve-ui.py` → 自分の AWS で [再作成](docs/recreate.md) と [v1.0.0 検証](docs/aws-verify-v1.0.0.md)。
 
 Lambda・Step Functions・DynamoDB を学ぶ日用品自動補充の練習用リポジトリ。  
-**いまあるもの:** [完成までの計画](docs/plan/README.md)、品質ツール、**v0.1.0〜v0.5.0**（判定・占有・承認・画面・模擬注文/Wait・冪等加算・補償・`template.yaml`）。  
-**ないもの:** AWS デプロイ済み環境（**エージェントは AWS に接続しない**）。v0.5.0 は **実装済み・AWS 検証待ち**。
+**いまあるもの:** [完成までの計画](docs/plan/README.md)、品質ツール、**v0.1.0〜v1.0.0**（判定・占有・承認・画面・注文/Wait・冪等加算・補償・受け入れ表・選定理由・`template.yaml`）。  
+**ないもの:** AWS デプロイ済み環境（**エージェントは AWS に接続しない**）。A〜H は **実装済み・AWS 検証待ち**。
 
 ## ツールの役割（二重管理しない）
 
@@ -12,7 +12,7 @@ Lambda・Step Functions・DynamoDB を学ぶ日用品自動補充の練習用リ
 | --- | --- | --- |
 | ランタイム / CLI | `mise.toml` + `mise.lock` | Python **3.12.16**、Node **22.23.4**、`npm:skills` **1.7.6**、**uv 0.13.7** |
 | Python パッケージ | `pyproject.toml` + `uv.lock` | pytest / pytest-cov / Ruff / **ty** / vulture / **aws-sam-cli**、`src/household_restock` |
-| IaC（v0.5.0） | `template.yaml` + `statemachine/` | Streams・占有・承認・注文・Wait・冪等加算・補償 |
+| IaC（v1.0.0） | `template.yaml` + `statemachine/` | Streams・占有・承認・注文・Wait・冪等加算・補償（SAM 管理） |
 | 最小 UI | `web/` + `scripts/serve-ui.py` | localhost 中継（秘密はブラウザに出さない） |
 | e2e（npm） | `package.json` + `package-lock.json` | **e2e 0.23.0** + `@e2e-dev/web` 0.15.5（mise の npm ツールには載せない） |
 | 文書スキル | `.agents/skills/` + `skills-lock.json` | `i-have-adhd` / `yomiyasu`（手順は [AGENTS.md](AGENTS.md)） |
@@ -133,19 +133,22 @@ APPROVAL_SHARED_SECRET='…' \
   ./scripts/decide-restock.sh "<ApprovalApiUrl>" toilet-paper "<streamEventId>" approve
 ```
 
-- v0.1〜v0.5: [docs/aws-verify-v0.5.0.md](docs/aws-verify-v0.5.0.md)（最新）。設計は [docs/plan/v0.5.0-design.md](docs/plan/v0.5.0-design.md)
+- 全体: [docs/aws-verify-v1.0.0.md](docs/aws-verify-v1.0.0.md) / [docs/recreate.md](docs/recreate.md)
+- 受け入れ表: [docs/plan/v1.0.0-acceptance.md](docs/plan/v1.0.0-acceptance.md)
+- 選定理由: [docs/plan/why-step-functions.md](docs/plan/why-step-functions.md)
 - deploy 時の `ApprovalSharedSecret` は NoEcho。リポジトリに書かない
 
 ### やっていないこと / 未検証
 
 - AWS 認証・デプロイ・課金操作（エージェントは実施しない）
-- v0.1.0〜v0.5.0 の **AWS 上の業務確認は未検証**（実装済み・AWS 検証待ち）
+- 受け入れ A〜H の **AWS 上の業務確認は未検証**（実装済み・AWS 検証待ち）
+- 発展要件（Map / JSONata / Express / durable 比較 / アラーム）は対象外
 
 ## 3. 関連リンク
 
 - [docs/plan/README.md](docs/plan/README.md) … 全体ロードマップと要件追跡
-- [docs/plan/v0.5.0.md](docs/plan/v0.5.0.md) … 冪等加算と補償
-- [docs/aws-verify-v0.5.0.md](docs/aws-verify-v0.5.0.md) … ユーザー向け AWS 確認手順
+- [docs/plan/v1.0.0.md](docs/plan/v1.0.0.md) … 完成受け入れ
+- [docs/recreate.md](docs/recreate.md) … 削除・再デプロイと画面中継の再現
 - [AGENTS.md](AGENTS.md) … 文書スキルと品質コマンド
 - [docs/skills-sources.md](docs/skills-sources.md) … skill のソース commit / ライセンス
 

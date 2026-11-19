@@ -1,7 +1,7 @@
 [project]
 name = "household-restock"
-version = "0.5.0"
-description = "日用品自動補充ワークフロー学習用（v0.5.0: 冪等加算と補償）"
+version = "1.0.0"
+description = "日用品自動補充ワークフロー学習用（v1.0.0: 完成受け入れ）"
 requires-python = "==3.12.*"
 readme = "README.md"
 dependencies = []
